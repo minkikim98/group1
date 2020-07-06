@@ -62,13 +62,78 @@ start_process (void *file_name_)
   if_.gs = if_.fs = if_.es = if_.ds = if_.ss = SEL_UDSEG;
   if_.cs = SEL_UCSEG;
   if_.eflags = FLAG_IF | FLAG_MBS;
+  int file_name_len = 0;
+  while (file_name[file_name_len] && file_name[file_name_len] != ' ')
+    file_name_len ++;
+  char last_char = file_name[file_name_len];
+  file_name[file_name_len] = '\0';
   success = load (file_name, &if_.eip, &if_.esp);
+  file_name[file_name_len] = last_char;
 
+  //static void load_stack();
+
+  void load_stack(void)
+  {
+    char* argPtr = file_name + file_name_len;
+    char* stackFrame = if_.esp, *stackPtr = (char*) if_.esp;
+		bool wasSapce = true;
+		char nullChar = '\0';
+		int numTokens = 0;
+    void push_char(char c)
+    {
+      *--stackPtr = c;
+    }
+		for (int i = strlen(argPtr) - 1; i >= 0; i--)
+		{
+			if (argPtr[i] != ' ')
+			{
+				if (wasSapce)
+				{
+          push_char('\0');
+					numTokens++;
+				}
+        push_char(argPtr[i]);
+			}
+			wasSapce = argPtr[i] == ' ' ? true : false;
+		}
+    void push_int(int i)
+    {
+      stackPtr -=4;
+      *((int*) stackPtr) = i;
+      //printf("pushed: %04x at: %04p\n", i, stackPtr);
+    }
+		int argvLen = stackFrame - stackPtr;
+    for (int i = 0; i < (16 - (argvLen + (numTokens + 3) * 4) % 16) % 16; i ++)
+    {
+      push_char(0);
+    }
+    push_int(0);
+		bool isChar = false;
+		int offset = -1;
+		for (int i = 0; i < numTokens;)
+		{
+			//cout << stackFrame[offset] << wasChar << endl;
+			if (offset < -argvLen) break;
+			isChar = stackFrame[offset] != nullChar ? true : false;
+			if (offset == - argvLen || (stackFrame[offset - 1] == '\0' && isChar))
+			{
+        push_int((int) stackFrame + offset);
+				i++;
+			}
+			offset--;
+		}
+    push_int((int) stackPtr);
+    push_int(numTokens);
+    if_.esp = stackPtr - 4;
+    //printf("esp= %04p\n", if_.esp);
+  }
+  
   /* If load failed, quit. */
+  //load_stack();
+  load_stack();
   palloc_free_page (file_name);
   if (!success)
     thread_exit ();
-
   /* Start the user process by simulating a return from an
      interrupt, implemented by intr_exit (in
      threads/intr-stubs.S).  Because intr_exit takes all of its
