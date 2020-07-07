@@ -3,15 +3,24 @@
 #include <syscall-nr.h>
 #include "threads/interrupt.h"
 #include "threads/thread.h"
+#include "filesys/filesys.h"
+#include "filesys/file.h"
 
 static void syscall_handler (struct intr_frame *);
-static struct lock file_lock;
+struct lock file_lock;
+struct file *file_descriptors[128];
 
 void
 syscall_init (void)
 {
   intr_register_int (0x30, 3, INTR_ON, syscall_handler, "syscall");
   lock_init(&file_lock);
+  int i;
+  for (i = 0; i < 128; i ++) {
+    file_descriptors[i] = NULL;
+  }
+  //file_descriptors[0] = STDIN_FILENO;
+  //file_descriptors[1] = STDOUT_FILENO;
 }
 
 static void
@@ -44,7 +53,43 @@ syscall_handler (struct intr_frame *f UNUSED)
     || args[0] == SYS_SEEK
     || args[0] == SYS_TELL
     || args[0] == SYS_CLOSE) {
+
       lock_acquire(&file_lock);
+
+      if (args[0] == SYS_CREATE) {
+        f->eax = filesys_create((char *) args[1], args[2]);
+      } else if (args[0] == SYS_REMOVE) {
+        f->eax = filesys_remove((char *) args[1]);
+      } else if (args[0] == SYS_OPEN) {
+        struct file* fp = filesys_open((char *) args[1]);
+        int fd = 2;
+        while (fd < 128) {
+          if (file_descriptors[fd] == NULL) {
+            file_descriptors[fd] = fp;
+            break;
+          }
+          fd ++;
+        }
+        if (fd == 128) {
+          f->eax = -1;
+        }
+        f->eax = fd + 2;
+      } else if (args[0] == SYS_FILESIZE) {
+        f->eax= file_length(file_descriptors[args[1]]);
+      } else if (args[0] == SYS_READ) {
+        f->eax = file_read(file_descriptors[args[1]], (void *) args[2], args[3]);
+      } else if (args[0] == SYS_WRITE) {
+        f->eax = file_write(file_descriptors[args[1]], (void *) args[2], args[3]);
+      } else if (args[0] == SYS_SEEK) {
+        file_seek(file_descriptors[args[1]], args[2]);
+      } else if (args[0] == SYS_TELL) {
+        f->eax = file_tell(file_descriptors[args[1]]);
+      } else if (args[0] == SYS_CLOSE) {
+        file_close(file_descriptors[args[1]]);
+        file_descriptors[args[1]] = NULL;
+      }
+
+
       lock_release(&file_lock);
     }
 
