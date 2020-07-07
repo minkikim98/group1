@@ -73,13 +73,18 @@ syscall_handler (struct intr_frame *f UNUSED)
         if (fd == 128) {
           f->eax = -1;
         }
-        f->eax = fd + 2;
+        f->eax = fd;
       } else if (args[0] == SYS_FILESIZE) {
         f->eax= file_length(file_descriptors[args[1]]);
       } else if (args[0] == SYS_READ) {
         f->eax = file_read(file_descriptors[args[1]], (void *) args[2], args[3]);
       } else if (args[0] == SYS_WRITE) {
-        f->eax = file_write(file_descriptors[args[1]], (void *) args[2], args[3]);
+        if (args[1] == 1) {
+          printf("%s", (char *) args[2]);
+          f->eax = args[3];
+        } else {
+          f->eax = file_write(file_descriptors[args[1]], (void *) args[2], args[3]);
+        }
       } else if (args[0] == SYS_SEEK) {
         file_seek(file_descriptors[args[1]], args[2]);
       } else if (args[0] == SYS_TELL) {
