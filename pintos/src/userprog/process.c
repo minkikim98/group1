@@ -70,12 +70,9 @@ start_process (void *file_name_)
   success = load (file_name, &if_.eip, &if_.esp);
   file_name[file_name_len] = last_char;
 
-  //static void load_stack();
-
-  printf("File_name: %s\n", file_name);
   void load_stack(void)
   {
-    char* argPtr = file_name;// + file_name_len;
+    char* argPtr = file_name;
     char* stackFrame = if_.esp, *stackPtr = (char*) if_.esp;
 		bool wasSapce = true;
 		char nullChar = '\0';
@@ -101,7 +98,6 @@ start_process (void *file_name_)
     {
       stackPtr -=4;
       *((int*) stackPtr) = i;
-      printf("pushed %04x : %04x\n", (int) stackPtr, i);
     }
 		int argvLen = stackFrame - stackPtr;
     for (int i = 0; i < (16 - (argvLen + (numTokens + 3) * 4) % 16) % 16; i ++)
@@ -113,7 +109,6 @@ start_process (void *file_name_)
 		int offset = -1;
 		for (int i = 0; i < numTokens;)
 		{
-			//cout << stackFrame[offset] << wasChar << endl;
 			if (offset < -argvLen) break;
 			isChar = stackFrame[offset] != nullChar ? true : false;
 			if (offset == - argvLen || (stackFrame[offset - 1] == '\0' && isChar))
@@ -126,11 +121,9 @@ start_process (void *file_name_)
     push_int((int) stackPtr);
     push_int(numTokens);
     if_.esp = stackPtr - 4;
-    //printf("esp= %04p\n", if_.esp);
   }
   
   /* If load failed, quit. */
-  //load_stack();
   load_stack();
   palloc_free_page (file_name);
   if (!success)
