@@ -72,9 +72,10 @@ start_process (void *file_name_)
 
   //static void load_stack();
 
+  printf("File_name: %s\n", file_name);
   void load_stack(void)
   {
-    char* argPtr = file_name + file_name_len;
+    char* argPtr = file_name;// + file_name_len;
     char* stackFrame = if_.esp, *stackPtr = (char*) if_.esp;
 		bool wasSapce = true;
 		char nullChar = '\0';
@@ -100,7 +101,7 @@ start_process (void *file_name_)
     {
       stackPtr -=4;
       *((int*) stackPtr) = i;
-      //printf("pushed: %04x at: %04p\n", i, stackPtr);
+      printf("pushed %04x : %04x\n", (int) stackPtr, i);
     }
 		int argvLen = stackFrame - stackPtr;
     for (int i = 0; i < (16 - (argvLen + (numTokens + 3) * 4) % 16) % 16; i ++)
