@@ -18,10 +18,12 @@
 #include "threads/synch.h"
 #include "threads/thread.h"
 #include "threads/vaddr.h"
+#include "threads/malloc.h"
 
 static struct semaphore temporary;
 static thread_func start_process NO_RETURN;
 static bool load (const char *cmdline, void (**eip) (void), void **esp);
+char *current_process;
 
 /* Starts a new thread running a user program loaded from
    FILENAME.  The new thread may be scheduled (and may even exit)
@@ -67,6 +69,13 @@ start_process (void *file_name_)
     file_name_len ++;
   char last_char = file_name[file_name_len];
   file_name[file_name_len] = '\0';
+  int i = 0;
+  current_process = (char *) malloc((file_name_len + 1) * sizeof(char));
+  while (file_name[i]) {
+    current_process[i] = file_name[i];
+    i ++;
+  }
+  current_process[file_name_len] = '\0';
   success = load (file_name, &if_.eip, &if_.esp);
   file_name[file_name_len] = last_char;
 
@@ -127,7 +136,7 @@ start_process (void *file_name_)
     if_.esp = stackPtr - 4;
     //printf("esp= %04p\n", if_.esp);
   }
-  
+
   /* If load failed, quit. */
   //load_stack();
   load_stack();
@@ -183,6 +192,10 @@ process_exit (void)
       pagedir_activate (NULL);
       pagedir_destroy (pd);
     }
+  struct file *file = filesys_open (current_process);
+  file_allow_write(file);
+  file_close (file);
+  free(current_process);
   sema_up (&temporary);
 }
 
@@ -311,6 +324,9 @@ load (const char *file_name, void (**eip) (void), void **esp)
       printf ("load: %s: error loading executable\n", file_name);
       goto done;
     }
+
+  /* Deny write to executable. */
+  file_deny_write(file);
 
   /* Read program headers. */
   file_ofs = ehdr.e_phoff;
