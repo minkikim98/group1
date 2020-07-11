@@ -44,6 +44,10 @@ syscall_handler (struct intr_frame *f UNUSED)
       thread_exit ();
     }
 
+
+  /**
+  * Task 3: File operations.
+  */
   if (args[0] == SYS_CREATE
     || args[0] == SYS_REMOVE
     || args[0] == SYS_OPEN
