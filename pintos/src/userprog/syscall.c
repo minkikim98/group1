@@ -6,6 +6,9 @@
 #include "filesys/filesys.h"
 #include "filesys/file.h"
 
+#include "../threads/vaddr.h"
+#include "../devices/shutdown.h"
+
 static void syscall_handler (struct intr_frame *);
 struct lock file_lock;
 struct file *file_descriptors[128];
@@ -37,12 +40,37 @@ syscall_handler (struct intr_frame *f UNUSED)
 
   /* printf("System call number: %d\n", args[0]); */
 
-  if (args[0] == SYS_EXIT)
-    {
-      f->eax = args[1];
-      printf ("%s: exit(%d)\n", &thread_current ()->name, args[1]);
-      thread_exit ();
-    }
+  //Helper function to verify user-provided pointers.
+  void *verify_p(void *user_p) {
+    // Check if user pointer is below PHYS_BASE
+    if (!is_user_vaddr(user_p)) return NULL;
+    // Check if user pointer is NULL
+    if (user_p == NULL) return NULL;
+
+    // TODO
+  }
+
+  if (args[0] == SYS_PRACTICE) {
+    f->eax = args[1] + 1;
+  }
+
+  if (args[0] == SYS_HALT) {
+    shutdown_power_off();
+  }
+
+  if (args[0] == SYS_EXIT) {
+    f->eax = args[1];
+    printf ("%s: exit(%d)\n", &thread_current ()->name, args[1]);
+    thread_exit ();
+  }
+
+  if (args[0] == SYS_EXEC) {
+
+  }
+
+  if (args[0] == SYS_WAIT) {
+
+  }
 
   if (args[0] == SYS_CREATE
     || args[0] == SYS_REMOVE
