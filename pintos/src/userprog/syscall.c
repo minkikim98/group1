@@ -9,6 +9,7 @@
 #include "threads/vaddr.h"
 #include "filesys/filesys.h"
 #include "filesys/file.h"
+#include "devices/input.h"
 
 static void syscall_handler (struct intr_frame *);
 struct lock file_lock;
@@ -165,9 +166,63 @@ syscall_handler (struct intr_frame *f UNUSED)
         }
         f->eax = fd;
       } else if (args[0] == SYS_FILESIZE) {
-        f->eax= file_length(cur->file_descriptors[args[1]]);
+        if (!is_valid((void *) args + 1, cur)) {
+          lock_release(&file_lock);
+          printf ("%s: exit(%d)\n", (char *) &thread_current ()->name, -1);
+          thread_exit ();
+        }
+        int fd = args[1];
+        if (fd < 2 ||fd > 127) {
+          f->eax = 0;
+          goto release;
+        }
+        f->eax = file_length(cur->file_descriptors[args[1]]);
       } else if (args[0] == SYS_READ) {
-        f->eax = file_read(cur->file_descriptors[args[1]], (void *) args[2], args[3]);
+        if (!is_valid((void *) args + 1, cur) || !is_valid((void *) args + 2, cur) || !is_valid((void *) args + 3, cur)) {
+          lock_release(&file_lock);
+          printf ("%s: exit(%d)\n", (char *) &thread_current ()->name, -1);
+          thread_exit ();
+        }
+        if (!is_valid((void *) args[2], cur) || args[2] == 0) {
+          lock_release(&file_lock);
+          printf ("%s: exit(%d)\n", (char *) &thread_current ()->name, -1);
+          thread_exit ();
+        }
+        int n = 0;
+        int size = (int) args[3];
+        char *tmp = (char *) args[2];
+        for (; n < size; n ++) {
+          if (!is_valid((void *) args[2] + n, cur)) {
+            f->eax = -1;
+            goto release;
+          }
+        }
+        char buffer[n];
+        int fd = args[1];
+        /** Read from standard input. */
+        if (fd == 0) {
+          int i;
+          for (i = 0; i < size; i ++) {
+            buffer[i] = input_getc();
+          }
+          f->eax = size;
+          for (i = 0; i < size; i ++) {
+            *(tmp + i) = buffer[i];
+          }
+          goto release;
+        }
+        /** Read from a file descriptor. */
+        if (fd < 2 ||fd > 127) {
+          f->eax = -1;
+          goto release;
+        }
+        f->eax = file_read(cur->file_descriptors[args[1]], buffer, args[3]);
+        if (f->eax > 0) {
+          int j;
+          for (j = 0; j < size; j ++) {
+            *(tmp + j) = buffer[j];
+          }
+        }
       } else if (args[0] == SYS_WRITE) {
         if (args[1] == 1) {
           printf("%s", (char *) args[2]);
