@@ -179,6 +179,8 @@ thread_create (const char *name, int priority,
   init_thread (t, name, priority);
   tid = t->tid = allocate_tid ();
 
+  //get current tcb thru current (parent)
+
   //mabel: May have to put malloc elsewhere, but do you malloc here?
   struct wait_status * my_wait_status = (struct wait_status *) malloc(sizeof(struct wait_status)); //mabel
   //my_wait_status->o_tid = tid; //mabel (is this accessible here)
