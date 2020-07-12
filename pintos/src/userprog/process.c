@@ -45,6 +45,8 @@ process_execute (const char *file_name)
   tid = thread_create (file_name, PRI_DEFAULT, start_process, fn_copy);
   if (tid == TID_ERROR)
     palloc_free_page (fn_copy);
+
+  //struct thread my_current_thread = thread_current();
   return tid;
 }
 
@@ -156,14 +158,17 @@ process_wait (tid_t child_tid)
   struct thread * t = thread_current(); //mabel (will this give you the current thread?)
   struct list_elem *e;
   struct wait_status *f;
+  // Pick a process and exit.
+  //printf("t->o_children_wait_status_list: %04p\n", t->o_children_wait_status_list);
   for (e = list_begin (&(t->o_children_wait_status_list)); e != list_end (&(t->o_children_wait_status_list)); e = list_next (e))
   {
     f = list_entry (e, struct wait_status, elem);
     if (f->o_tid == child_tid) { //This is the child we want to wait on.
         //refer to the design doc on what should be done here
-        break;
+      //printf("tid: %d\n", f->o_tid);
     }
   }
+  //printf("t->o_children_wait_status_list finished\n");
   sema_down (&temporary); //mabel skeleton
   return 0; //mabel skeleton
 }
@@ -200,6 +205,7 @@ process_exit (void)
 void
 process_activate (void)
 {
+  //printf("process_activate\n");
   struct thread *t = thread_current ();
 
   /* Activate thread's page tables. */
