@@ -87,7 +87,9 @@ main (void)
 
   /* Initialize ourselves as a thread so we can use locks,
      then enable console locking. */
+  //printf("Thread_init start\n");
   thread_init ();
+  printf("Thread_init end\n");
   console_init ();
 
   /* Greet user. */
@@ -130,6 +132,7 @@ main (void)
   printf ("Boot complete.\n");
 
   /* Run actions specified on kernel command line. */
+  printf("run_actions start\n");
   run_actions (argv);
 
   /* Finish up. */
