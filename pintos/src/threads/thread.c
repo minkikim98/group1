@@ -198,7 +198,7 @@ thread_create (const char *name, int priority,
   sf->eip = switch_entry;
   sf->ebp = 0;
 
-  /* Mabel allocations below: */
+  /* Mabel allocations below (not sure whether they should go): */
   list_init(&(t->my_children_wait_status_list)); //mabel, Do list init
   //mabel: May have to put malloc elsewhere, but do you malloc here?
   struct wait_status * my_wait_status = (struct wait_status *) malloc(sizeof(struct wait_status)); //mabel

@@ -99,13 +99,14 @@ struct thread
 #ifdef USERPROG
     /* Owned by userprog/process.c. */
     uint32_t *pagedir;                  /* Page directory. */
+    
+    /* Mabel */
+    struct list my_children_wait_status_list; //mabel, later initialized in thread.c
 #endif
 
     /* Owned by thread.c. */
     unsigned magic;                     /* Detects stack overflow. */
 
-    /* Mabel */
-    struct list my_children_wait_status_list; //mabel, later initialized in thread.c
   };
 
 /* Mabel's comments: Does it go in this file? I put it here just in case.
