@@ -18,17 +18,15 @@
 #include "threads/synch.h"
 #include "threads/thread.h"
 #include "threads/vaddr.h"
-#include "threads/malloc.h"
 
 static struct semaphore temporary;
 static thread_func start_process NO_RETURN;
 static bool load (const char *cmdline, void (**eip) (void), void **esp);
-char *current_process;
 
 /* Starts a new thread running a user program loaded from
    FILENAME.  The new thread may be scheduled (and may even exit)
    before process_execute() returns.  Returns the new process's
-   thread id, or TID_ERROR if the thread cannot be created. */
+   thread id, or TID_ERROR if the thread cannot be created. ;)*/
 tid_t
 process_execute (const char *file_name)
 {
@@ -69,26 +67,24 @@ start_process (void *file_name_)
     file_name_len ++;
   char last_char = file_name[file_name_len];
   file_name[file_name_len] = '\0';
-  int i = 0;
-  current_process = (char *) malloc((file_name_len + 1) * sizeof(char));
-  while (file_name[i]) {
-    current_process[i] = file_name[i];
-    i ++;
-  }
-  current_process[file_name_len] = '\0';
   success = load (file_name, &if_.eip, &if_.esp);
   file_name[file_name_len] = last_char;
 
   void load_stack(void)
   {
     char* argPtr = file_name;
-    char* stackFrame = if_.esp, *stackPtr = (char*) if_.esp;
+    const char* stackFrame = (char*) if_.esp;
+    char* stackPtr = (char*) if_.esp;
 		bool wasSapce = true;
-		char nullChar = '\0';
 		int numTokens = 0;
     void push_char(char c)
     {
       *--stackPtr = c;
+    }
+    void push_int(int i)
+    {
+      stackPtr -=4;
+      *((int*) stackPtr) = i;
     }
 		for (int i = strlen(argPtr) - 1; i >= 0; i--)
 		{
@@ -103,11 +99,6 @@ start_process (void *file_name_)
 			}
 			wasSapce = argPtr[i] == ' ' ? true : false;
 		}
-    void push_int(int i)
-    {
-      stackPtr -=4;
-      *((int*) stackPtr) = i;
-    }
 		int argvLen = stackFrame - stackPtr;
     for (int i = 0; i < (16 - (argvLen + (numTokens + 3) * 4) % 16) % 16; i ++)
     {
@@ -119,7 +110,7 @@ start_process (void *file_name_)
 		for (int i = 0; i < numTokens;)
 		{
 			if (offset < -argvLen) break;
-			isChar = stackFrame[offset] != nullChar ? true : false;
+			isChar = stackFrame[offset] != '\0' ? true : false;
 			if (offset == - argvLen || (stackFrame[offset - 1] == '\0' && isChar))
 			{
         push_int((int) stackFrame + offset);
@@ -200,10 +191,6 @@ process_exit (void)
       pagedir_activate (NULL);
       pagedir_destroy (pd);
     }
-  struct file *file = filesys_open (current_process);
-  file_allow_write(file);
-  file_close (file);
-  free(current_process);
   sema_up (&temporary);
 }
 
