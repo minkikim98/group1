@@ -92,6 +92,12 @@ struct thread
     int priority;                       /* Priority. */
     struct list_elem allelem;           /* List element for all threads list. */
 
+    /* Project 0 Task 3
+    */
+    struct file *file_descriptors[128];
+    struct file *current_process;
+
+
     /* Shared between thread.c and synch.c. */
     struct list_elem elem;              /* List element. */
 

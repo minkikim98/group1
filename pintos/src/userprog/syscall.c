@@ -1,26 +1,40 @@
 #include "userprog/syscall.h"
+#include "userprog/pagedir.h"
 #include <stdio.h>
 #include <syscall-nr.h>
+#include <string.h>
+#include <user/syscall.h>
 #include "threads/interrupt.h"
 #include "threads/thread.h"
+#include "threads/vaddr.h"
 #include "filesys/filesys.h"
 #include "filesys/file.h"
 
 static void syscall_handler (struct intr_frame *);
 struct lock file_lock;
-struct file *file_descriptors[128];
 
 void
 syscall_init (void)
 {
   intr_register_int (0x30, 3, INTR_ON, syscall_handler, "syscall");
   lock_init(&file_lock);
-  int i;
-  for (i = 0; i < 128; i ++) {
-    file_descriptors[i] = NULL;
+}
+
+/**
+* Checks VADDR is not NULL, is in userspace, and is mapped.
+*/
+static bool
+is_valid(const void *vaddr, struct thread *t) {
+  if (vaddr == NULL) {
+    return false;
   }
-  //file_descriptors[0] = STDIN_FILENO;
-  //file_descriptors[1] = STDOUT_FILENO;
+  if (!is_user_vaddr(vaddr)) {
+    return false;
+  }
+  if (pagedir_get_page(t->pagedir, vaddr) == NULL) {
+    return false;
+  }
+  return true;
 }
 
 static void
@@ -59,17 +73,42 @@ syscall_handler (struct intr_frame *f UNUSED)
     || args[0] == SYS_CLOSE) {
 
       lock_acquire(&file_lock);
+      struct thread *cur = thread_current();
 
       if (args[0] == SYS_CREATE) {
-        f->eax = filesys_create((char *) args[1], args[2]);
+        if (!is_valid((void *) args + 1, cur) || !is_valid((void *) args + 2, cur)) {
+          lock_release(&file_lock);
+          printf ("%s: exit(%d)\n", &thread_current ()->name, -1);
+          thread_exit ();
+
+        }
+        if (!is_valid((void *) args[1], cur) || args[1] == 0) {
+          lock_release(&file_lock);
+          printf ("%s: exit(%d)\n", &thread_current ()->name, -1);
+          thread_exit ();
+
+        }
+        int n = 0;
+        int m = 50;
+        char *tmp = (char *) args[1];
+        while (*(tmp + n) != '\0' && n < m) {
+          if (!is_valid((void *) args[1] + n, cur)) {
+            f->eax = false;
+            goto release;
+          }
+          n ++;
+        }
+        char file_name[n];
+        memcpy((char *) file_name, (char *) args[1], n + 1);
+        f->eax = filesys_create((char *) file_name, args[2]);
       } else if (args[0] == SYS_REMOVE) {
         f->eax = filesys_remove((char *) args[1]);
       } else if (args[0] == SYS_OPEN) {
         struct file* fp = filesys_open((char *) args[1]);
         int fd = 2;
         while (fd < 128) {
-          if (file_descriptors[fd] == NULL) {
-            file_descriptors[fd] = fp;
+          if (cur->file_descriptors[fd] == NULL) {
+            cur->file_descriptors[fd] = fp;
             break;
           }
           fd ++;
@@ -79,27 +118,28 @@ syscall_handler (struct intr_frame *f UNUSED)
         }
         f->eax = fd;
       } else if (args[0] == SYS_FILESIZE) {
-        f->eax= file_length(file_descriptors[args[1]]);
+        f->eax= file_length(cur->file_descriptors[args[1]]);
       } else if (args[0] == SYS_READ) {
-        f->eax = file_read(file_descriptors[args[1]], (void *) args[2], args[3]);
+        f->eax = file_read(cur->file_descriptors[args[1]], (void *) args[2], args[3]);
       } else if (args[0] == SYS_WRITE) {
         if (args[1] == 1) {
           printf("%s", (char *) args[2]);
           f->eax = args[3];
         } else {
-          f->eax = file_write(file_descriptors[args[1]], (void *) args[2], args[3]);
+          f->eax = file_write(cur->file_descriptors[args[1]], (void *) args[2], args[3]);
         }
       } else if (args[0] == SYS_SEEK) {
-        file_seek(file_descriptors[args[1]], args[2]);
+        file_seek(cur->file_descriptors[args[1]], args[2]);
       } else if (args[0] == SYS_TELL) {
-        f->eax = file_tell(file_descriptors[args[1]]);
+        f->eax = file_tell(cur->file_descriptors[args[1]]);
       } else if (args[0] == SYS_CLOSE) {
-        file_close(file_descriptors[args[1]]);
-        file_descriptors[args[1]] = NULL;
+        file_close(cur->file_descriptors[args[1]]);
+        cur->file_descriptors[args[1]] = NULL;
       }
 
 
-      lock_release(&file_lock);
+      release:
+        lock_release(&file_lock);
     }
 
 }
