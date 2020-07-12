@@ -78,15 +78,13 @@ syscall_handler (struct intr_frame *f UNUSED)
       if (args[0] == SYS_CREATE) {
         if (!is_valid((void *) args + 1, cur) || !is_valid((void *) args + 2, cur)) {
           lock_release(&file_lock);
-          printf ("%s: exit(%d)\n", &thread_current ()->name, -1);
+          printf ("%s: exit(%d)\n", (char *) &thread_current ()->name, -1);
           thread_exit ();
-
         }
         if (!is_valid((void *) args[1], cur) || args[1] == 0) {
           lock_release(&file_lock);
-          printf ("%s: exit(%d)\n", &thread_current ()->name, -1);
+          printf ("%s: exit(%d)\n", (char *) &thread_current ()->name, -1);
           thread_exit ();
-
         }
         int n = 0;
         int m = 50;
@@ -102,9 +100,57 @@ syscall_handler (struct intr_frame *f UNUSED)
         memcpy((char *) file_name, (char *) args[1], n + 1);
         f->eax = filesys_create((char *) file_name, args[2]);
       } else if (args[0] == SYS_REMOVE) {
+        if (!is_valid((void *) args + 1, cur)) {
+          lock_release(&file_lock);
+          printf ("%s: exit(%d)\n", (char *) &thread_current ()->name, -1);
+          thread_exit ();
+        }
+        if (!is_valid((void *) args[1], cur) || args[1] == 0) {
+          lock_release(&file_lock);
+          printf ("%s: exit(%d)\n", (char *) &thread_current ()->name, -1);
+          thread_exit ();
+        }
+        int n = 0;
+        int m = 50;
+        char *tmp = (char *) args[1];
+        while (*(tmp + n) != '\0' && n < m) {
+          if (!is_valid((void *) args[1] + n, cur)) {
+            f->eax = false;
+            goto release;
+          }
+          n ++;
+        }
+        char file_name[n];
+        memcpy((char *) file_name, (char *) args[1], n + 1);
         f->eax = filesys_remove((char *) args[1]);
       } else if (args[0] == SYS_OPEN) {
-        struct file* fp = filesys_open((char *) args[1]);
+        if (!is_valid((void *) args + 1, cur)) {
+          lock_release(&file_lock);
+          printf ("%s: exit(%d)\n", (char *) &thread_current ()->name, -1);
+          thread_exit ();
+        }
+        if (!is_valid((void *) args[1], cur) || args[1] == 0) {
+          lock_release(&file_lock);
+          printf ("%s: exit(%d)\n", (char *) &thread_current ()->name, -1);
+          thread_exit ();
+        }
+        int n = 0;
+        int m = 50;
+        char *tmp = (char *) args[1];
+        while (*(tmp + n) != '\0' && n < m) {
+          if (!is_valid((void *) args[1] + n, cur)) {
+            f->eax = false;
+            goto release;
+          }
+          n ++;
+        }
+        char file_name[n];
+        memcpy((char *) file_name, (char *) args[1], n + 1);
+        struct file* fp = filesys_open(file_name);
+        if (fp == NULL) {
+          f->eax = -1;
+          goto release;
+        }
         int fd = 2;
         while (fd < 128) {
           if (cur->file_descriptors[fd] == NULL) {
@@ -115,6 +161,7 @@ syscall_handler (struct intr_frame *f UNUSED)
         }
         if (fd == 128) {
           f->eax = -1;
+          goto release;
         }
         f->eax = fd;
       } else if (args[0] == SYS_FILESIZE) {
