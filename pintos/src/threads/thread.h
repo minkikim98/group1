@@ -82,6 +82,7 @@ typedef int tid_t;
    only because they are mutually exclusive: only a thread in the
    ready state is on the run queue, whereas only a thread in the
    blocked state is on a semaphore wait list. */
+
 struct thread
   {
     /* Owned by thread.c. */
@@ -102,7 +103,24 @@ struct thread
 
     /* Owned by thread.c. */
     unsigned magic;                     /* Detects stack overflow. */
+
+    /* Mabel */
+    struct list my_children_wait_status_list; //mabel, later initialized in thread.c
   };
+
+/* Mabel's comments: Does it go in this file? I put it here just in case.
+Notes: Semaphore is in threads/synch.h, its init method is in threads/synch.c
+#IFDEF PINTOS_LIST already done for us I think. */
+struct wait_status { //mabel
+  tid_t o_tid; //mabel
+  struct semaphore o_sem_exited; //mabel
+  uint32_t o_exit_code; //it can also be an int //mabel
+  uint32_t o_reference_count; //mabel
+  struct lock o_reference_count_lock; //mabel
+  struct list_elem elem; //it may have to be put in a list //mabel
+}; //mabel
+
+
 
 /* If false (default), use round-robin scheduler.
    If true, use multi-level feedback queue scheduler.
