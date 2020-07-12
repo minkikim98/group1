@@ -212,7 +212,7 @@ syscall_handler (struct intr_frame *f UNUSED)
           goto release;
         }
         /** Read from a file descriptor. */
-        if (fd < 2 ||fd > 127) {
+        if (fd < 2 ||fd > 127 || cur->file_descriptors[args[1]] == NULL) {
           f->eax = -1;
           goto release;
         }
