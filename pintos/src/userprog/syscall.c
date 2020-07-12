@@ -4,6 +4,7 @@
 #include <syscall-nr.h>
 #include <string.h>
 #include <user/syscall.h>
+#include <console.h>
 #include "threads/interrupt.h"
 #include "threads/thread.h"
 #include "threads/vaddr.h"
@@ -224,17 +225,85 @@ syscall_handler (struct intr_frame *f UNUSED)
           }
         }
       } else if (args[0] == SYS_WRITE) {
-        if (args[1] == 1) {
-          printf("%s", (char *) args[2]);
-          f->eax = args[3];
-        } else {
-          f->eax = file_write(cur->file_descriptors[args[1]], (void *) args[2], args[3]);
+        if (!is_valid((void *) args + 1, cur) || !is_valid((void *) args + 2, cur) || !is_valid((void *) args + 3, cur)) {
+          lock_release(&file_lock);
+          printf ("%s: exit(%d)\n", (char *) &thread_current ()->name, -1);
+          thread_exit ();
         }
+        if (!is_valid((void *) args[2], cur) || args[2] == 0) {
+          lock_release(&file_lock);
+          printf ("%s: exit(%d)\n", (char *) &thread_current ()->name, -1);
+          thread_exit ();
+        }
+        int n = 0;
+        int size = (int) args[3];
+        char *tmp = (char *) args[2];
+        for (; n < size ; n ++) {
+          if (!is_valid((void *) args[2] + n, cur)) {
+            f->eax = -1;
+            goto release;
+          }
+        }
+        char buffer[size];
+        memcpy(buffer, tmp, size);
+        int fd = args[1];
+        /* Write to standard output. */
+        if (fd == 1) {
+          int num_buf;
+          if (size % 100 == 0) {
+            num_buf = size / 100;
+          } else {
+            num_buf = size / 100 + 1;
+          }
+          char smaller_buf[100];
+          int i = 0;
+          for (; i < num_buf; i ++) {
+            if (i == num_buf - 1) {
+              memcpy(smaller_buf, buffer + i * 100, size - i * 100);
+              putbuf(smaller_buf, size - i * 100);
+            } else {
+              memcpy(smaller_buf, buffer + i * 100, 100);
+              putbuf(smaller_buf, 100);
+            }
+          }
+          goto release;
+        }
+        /* Write to a file. */
+        if (fd < 2 ||fd > 127 || cur->file_descriptors[args[1]] == NULL) {
+          f->eax = -1;
+          goto release;
+        }
+        f->eax = file_write(cur->file_descriptors[args[1]], buffer, size);
       } else if (args[0] == SYS_SEEK) {
+        if (!is_valid((void *) args + 1, cur) || !is_valid((void *) args + 2, cur)) {
+          lock_release(&file_lock);
+          printf ("%s: exit(%d)\n", (char *) &thread_current ()->name, -1);
+          thread_exit ();
+        }
+        if (args[1] < 2 || args[1] > 127 || cur->file_descriptors[args[1]] == NULL) {
+          goto release;
+        }
         file_seek(cur->file_descriptors[args[1]], args[2]);
       } else if (args[0] == SYS_TELL) {
+        if (!is_valid((void *) args + 1, cur)) {
+          lock_release(&file_lock);
+          printf ("%s: exit(%d)\n", (char *) &thread_current ()->name, -1);
+          thread_exit ();
+        }
+        if (args[1] < 2 || args[1] > 127 || cur->file_descriptors[args[1]] == NULL) {
+          f->eax = 0;
+          goto release;
+        }
         f->eax = file_tell(cur->file_descriptors[args[1]]);
       } else if (args[0] == SYS_CLOSE) {
+        if (!is_valid((void *) args + 1, cur)) {
+          lock_release(&file_lock);
+          printf ("%s: exit(%d)\n", (char *) &thread_current ()->name, -1);
+          thread_exit ();
+        }
+        if (args[1] < 2 || args[1] > 127 || cur->file_descriptors[args[1]] == NULL) {
+          goto release;
+        }
         file_close(cur->file_descriptors[args[1]]);
         cur->file_descriptors[args[1]] = NULL;
       }
