@@ -99,7 +99,7 @@ struct thread
 #ifdef USERPROG
     /* Owned by userprog/process.c. */
     uint32_t *pagedir;                  /* Page directory. */
-    
+
     /* Mabel */
     struct list my_children_wait_status_list; //mabel, later initialized in thread.c
 #endif
@@ -119,6 +119,7 @@ struct wait_status { //mabel
   uint32_t o_reference_count; //mabel
   struct lock o_reference_count_lock; //mabel
   struct list_elem elem; //it may have to be put in a list //mabel
+  uint8_t o_kernel_killed; //mabel
 }; //mabel
 
 

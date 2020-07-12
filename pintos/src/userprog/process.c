@@ -155,12 +155,26 @@ start_process (void *file_name_)
    immediately, without waiting.
 
    This function will be implemented in problem 2-2.  For now, it
-   does nothing. */
+   does nothing.
+   Mabel 7/11/20: I take this to mean that this will be called by the
+   process that .
+   Delete child_tid UNUSED keyword*/
 int
-process_wait (tid_t child_tid UNUSED)
-{
-  sema_down (&temporary);
-  return 0;
+process_wait (tid_t child_tid)
+{ //mabel (this whole function minus the skeleton)
+  struct thread * t = thread_current(); //mabel (will this give you the current thread?)
+  struct list_elem *e;
+  struct wait_status *f;
+  for (e = list_begin (&(t->my_children_wait_status_list)); e != list_end (&(t->my_children_wait_status_list)); e = list_next (e))
+  {
+    f = list_entry (e, struct wait_status, elem);
+    if (f->tid == child_tid) { //This is the child we want to wait on.
+        //refer to the design doc on what should be done here
+        break;
+    }
+  }
+  sema_down (&temporary); //mabel skeleton
+  return 0; //mabel skeleton
 }
 
 /* Free the current process's resources. */

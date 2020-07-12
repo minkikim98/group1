@@ -11,6 +11,7 @@
 #include "threads/switch.h"
 #include "threads/synch.h"
 #include "threads/vaddr.h"
+#include "threads/malloc.h" //mabel (tbd if inside or outside)
 #ifdef USERPROG
 #include "userprog/process.h"
 #endif
@@ -206,6 +207,7 @@ thread_create (const char *name, int priority,
   my_wait_status->o_sem_exited = (struct semaphore *) malloc(sizeof(struct semaphore)); //mabel
   sema_init(my_wait_status->o_sem_exited, 0); //mabel, initialize semaphore to 0
   my_wait_status->o_exit_code = NULL; //mabel
+  my_wait_status->o_kernel_killed = false;
   my_wait_status->o_reference_count = NULL; //mabel, exec should set this
   my_wait_status->o_reference_count_lock = (struct lock *) malloc(sizeof(struct lock));
   lock_init(my_wait_status->o_reference_count_lock); //mabel
