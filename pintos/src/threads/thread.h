@@ -92,6 +92,7 @@ struct thread
     uint8_t *stack;                     /* Saved stack pointer. */
     int priority;                       /* Priority. */
     struct list_elem allelem;           /* List element for all threads list. */
+    struct wait_status *o_wait_status;
 
     /* Shared between thread.c and synch.c. */
     struct list_elem elem;              /* List element. */
@@ -101,7 +102,7 @@ struct thread
     uint32_t *pagedir;                  /* Page directory. */
 
     /* Mabel */
-    struct list my_children_wait_status_list; //mabel, later initialized in thread.c
+    struct list o_children_wait_status_list; //mabel, later initialized in thread.c
 #endif
 
     /* Owned by thread.c. */

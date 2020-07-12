@@ -8,7 +8,7 @@
 
 #include "threads/vaddr.h"
 #include "devices/shutdown.h"
-#include "userprog/pagedir.c"
+#include "userprog/pagedir.h"
 
 static void syscall_handler (struct intr_frame *);
 struct lock file_lock;
@@ -43,7 +43,7 @@ syscall_handler (struct intr_frame *f UNUSED)
 
   //Helper function to verify user-provided pointers.
   // cloudnube
-  void *verify_p(void *user_p, unsigned size) {
+  void *verify_p(void *user_p) {
     // Check if user pointer is below PHYS_BASE
     if (!is_user_vaddr(user_p)) return NULL;
 
@@ -51,13 +51,13 @@ syscall_handler (struct intr_frame *f UNUSED)
     if (user_p == NULL) return NULL;
 
     // TODO 
-    if (size == NULL) {
+    // if (size == NULL) {
       
-    }
-    else {
+    // }
+    // else {
 
-    }
-    return pagedir_get_page(user_p);
+    // }
+    return NULL;// WILL CHANGE!!! pagedir_get_page(user_p);
   }
 
   if (args[0] == SYS_PRACTICE) {
@@ -79,10 +79,15 @@ syscall_handler (struct intr_frame *f UNUSED)
   if (args[0] == SYS_EXEC) {
     // Verify that user-given pointer is valid; if not, return -1 and exit
     char *file = verify_p(args[1]);
-    if (file == NULL) f->eax = -1;
-    thread_exit();
-
-    else process_execute(file);
+    if (file == NULL)
+    {
+      f->eax = -1;
+      thread_exit();
+    }
+    else
+    {
+      process_execute(file);
+    }
 
   }
 

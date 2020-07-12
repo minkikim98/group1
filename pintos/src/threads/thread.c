@@ -199,21 +199,6 @@ thread_create (const char *name, int priority,
   sf->eip = switch_entry;
   sf->ebp = 0;
 
-  /* Mabel allocations below (not sure whether they should go): */
-  list_init(&(t->o_children_wait_status)); //mabel, Do list init
-  //mabel: May have to put malloc elsewhere, but do you malloc here?
-  struct wait_status * my_wait_status = (struct wait_status *) malloc(sizeof(struct wait_status)); //mabel
-  my_wait_status->o_tid = tid; //mabel (is this accessible here)
-  my_wait_status->o_sem_exited = (struct semaphore *) malloc(sizeof(struct semaphore)); //mabel
-  sema_init(my_wait_status->o_sem_exited, 0); //mabel, initialize semaphore to 0
-  my_wait_status->o_exit_code = NULL; //mabel
-  my_wait_status->o_kernel_killed = false;
-  my_wait_status->o_reference_count = NULL; //mabel, exec should set this
-  my_wait_status->o_reference_count_lock = (struct lock *) malloc(sizeof(struct lock));
-  lock_init(my_wait_status->o_reference_count_lock); //mabel
-  //not sure if we should start doing something with list elem
-  /* End allocations */
-
 
   /* Add to run queue. */
   thread_unblock (t);
@@ -484,6 +469,23 @@ init_thread (struct thread *t, const char *name, int priority)
   t->stack = (uint8_t *) t + PGSIZE;
   t->priority = priority;
   t->magic = THREAD_MAGIC;
+
+  /* Mabel allocations below (not sure whether they should go): */
+  list_init(&(t->o_children_wait_status_list)); //mabel, Do list init
+  //mabel: May have to put malloc elsewhere, but do you malloc here?
+  struct wait_status * my_wait_status = (struct wait_status *) malloc(sizeof(struct wait_status)); //mabel
+  //my_wait_status->o_tid = tid; //mabel (is this accessible here)
+  //my_wait_status->o_sem_exited = (struct semaphore *) malloc(sizeof(struct semaphore)); //mabel
+  sema_init(&my_wait_status->o_sem_exited, 0); //mabel, initialize semaphore to 0
+  my_wait_status->o_exit_code = 0; //mabel
+  my_wait_status->o_kernel_killed = false;
+  my_wait_status->o_reference_count = 0; //mabel, exec should set this
+  //my_wait_status->o_reference_count_lock = (struct lock *) malloc(sizeof(struct lock));
+  lock_init(&my_wait_status->o_reference_count_lock); //mabel
+  //not sure if we should start doing something with list elem
+
+  t->o_wait_status = my_wait_status;
+  /* End allocations */
 
   old_level = intr_disable ();
   list_push_back (&all_list, &t->allelem);

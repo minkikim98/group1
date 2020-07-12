@@ -156,10 +156,10 @@ process_wait (tid_t child_tid)
   struct thread * t = thread_current(); //mabel (will this give you the current thread?)
   struct list_elem *e;
   struct wait_status *f;
-  for (e = list_begin (&(t->my_children_wait_status_list)); e != list_end (&(t->my_children_wait_status_list)); e = list_next (e))
+  for (e = list_begin (&(t->o_children_wait_status_list)); e != list_end (&(t->o_children_wait_status_list)); e = list_next (e))
   {
     f = list_entry (e, struct wait_status, elem);
-    if (f->tid == child_tid) { //This is the child we want to wait on.
+    if (f->o_tid == child_tid) { //This is the child we want to wait on.
         //refer to the design doc on what should be done here
         break;
     }
