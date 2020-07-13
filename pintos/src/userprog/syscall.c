@@ -60,6 +60,27 @@ syscall_handler (struct intr_frame *f UNUSED)
 
   //Helper function to verify user-provided pointers.
   // cloudnube
+  bool is_bad_p_byte(void *user_p)
+  {
+    if (user_p < PHYS_BASE)
+    {
+      return true;
+    }
+    if (user_p == 0)
+    {
+      return true;
+    }
+    return !is_valid(user_p, thread_current());
+  }
+  bool is_bad_fp(void *user_p)
+  {
+    for (int i = 0; i < 4; i ++)
+    {
+      if (is_bad_p_byte(user_p + i))
+        return true;
+    }
+    return false;
+  }
   void *verify_p(void *user_p) {
     // Check if user pointer is below PHYS_BASE
     if (!is_user_vaddr(user_p)) return NULL;
@@ -74,22 +95,39 @@ syscall_handler (struct intr_frame *f UNUSED)
     // else {
 
     // }
-    return NULL;// WILL CHANGE!!! pagedir_get_page(user_p);
+    return user_p;// WILL CHANGE!!! pagedir_get_page(user_p);
   }
 
+  if (is_bad_fp(args))
+  {
+    printf ("%s: exit(%d)\n", &thread_current ()->name, -1);
+    thread_exit();
+    return;
+  }
+  //printf("arg adress: %04p\n", args);
   if (args[0] == SYS_PRACTICE) {
     f->eax = args[1] + 1;
   }
 
   if (args[0] == SYS_HALT) {
     // Should free all memory and locks?
+    printf("Haling?\n");
     shutdown_power_off();
   }
 
   if (args[0] == SYS_EXIT) {
     f->eax = args[1];
-    thread_current()->o_wait_status->o_exit_code = args[1];
-    printf ("%s: exit(%d)\n", &thread_current ()->name, args[1]);
+    int code;
+    if (is_bad_fp(&args[1]))
+    {
+      code = -1;
+    }
+    else
+    {
+      code = args[1];
+    }
+    thread_current()->o_wait_status->o_exit_code = code;
+    printf ("%s: exit(%d)\n", &thread_current ()->name, code);
     thread_exit ();
   }
 
