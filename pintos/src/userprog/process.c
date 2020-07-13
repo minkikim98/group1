@@ -157,20 +157,16 @@ process_wait (tid_t child_tid)
 { //mabel (this whole function minus the skeleton)
   struct thread * t = thread_current(); //mabel (will this give you the current thread?)
   struct list_elem *e;
-  struct wait_status *f;
-  // Pick a process and exit.
-  //printf("t->o_children_wait_status_list: %04p\n", t->o_children_wait_status_list);
-  for (e = list_begin (&(t->o_children_wait_status_list)); e != list_end (&(t->o_children_wait_status_list)); e = list_next (e))
+  struct wait_status *my_wait_status = thread_get_wait_status(t, child_tid);
+  if (my_wait_status == NULL)
   {
-    f = list_entry (e, struct wait_status, elem);
-    if (f->o_tid == child_tid) { //This is the child we want to wait on.
-        //refer to the design doc on what should be done here
-      //printf("tid: %d\n", f->o_tid);
-    }
+    return -1;
   }
-  //printf("t->o_children_wait_status_list finished\n");
-  sema_down (&temporary); //mabel skeleton
-  return 0; //mabel skeleton
+  sema_down(&my_wait_status->o_sem_exited);
+  int exit_code = my_wait_status->o_kernel_killed ? -1 : (int) my_wait_status->o_exit_code;
+  list_remove(&my_wait_status->wselem);
+  wait_status_mod_ref(my_wait_status, -1);
+  return exit_code; // good stuff
 }
 
 /* Free the current process's resources. */
@@ -196,7 +192,8 @@ process_exit (void)
       pagedir_activate (NULL);
       pagedir_destroy (pd);
     }
-  sema_up (&temporary);
+  struct wait_status *my_wait_status = cur->o_wait_status;
+  sema_up (&my_wait_status->o_sem_exited);
 }
 
 /* Sets up the CPU for running user code in the current
