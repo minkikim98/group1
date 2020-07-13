@@ -1,10 +1,16 @@
 #include "userprog/syscall.h"
+#include "userprog/pagedir.h"
 #include <stdio.h>
 #include <syscall-nr.h>
+#include <string.h>
+#include <user/syscall.h>
+#include <console.h>
 #include "threads/interrupt.h"
 #include "threads/thread.h"
+#include "threads/vaddr.h"
 #include "filesys/filesys.h"
 #include "filesys/file.h"
+#include "devices/input.h"
 
 #include "threads/vaddr.h"
 #include "devices/shutdown.h"
@@ -12,19 +18,29 @@
 
 static void syscall_handler (struct intr_frame *);
 struct lock file_lock;
-struct file *file_descriptors[128];
 
 void
 syscall_init (void)
 {
   intr_register_int (0x30, 3, INTR_ON, syscall_handler, "syscall");
   lock_init(&file_lock);
-  int i;
-  for (i = 0; i < 128; i ++) {
-    file_descriptors[i] = NULL;
+}
+
+/**
+* Checks VADDR is not NULL, is in userspace, and is mapped.
+*/
+static bool
+is_valid(const void *vaddr, struct thread *t) {
+  if (vaddr == NULL) {
+    return false;
   }
-  //file_descriptors[0] = STDIN_FILENO;
-  //file_descriptors[1] = STDOUT_FILENO;
+  if (!is_user_vaddr(vaddr)) {
+    return false;
+  }
+  if (pagedir_get_page(t->pagedir, vaddr) == NULL) {
+    return false;
+  }
+  return true;
 }
 
 static void
@@ -97,6 +113,10 @@ syscall_handler (struct intr_frame *f UNUSED)
       f->eax = process_wait(args[1]); //assuming args[1] is the child tid
   }
 
+
+  /**
+  * Task 3: File operations.
+  */
   if (args[0] == SYS_CREATE
     || args[0] == SYS_REMOVE
     || args[0] == SYS_OPEN
@@ -108,47 +128,242 @@ syscall_handler (struct intr_frame *f UNUSED)
     || args[0] == SYS_CLOSE) {
 
       lock_acquire(&file_lock);
+      struct thread *cur = thread_current();
 
       if (args[0] == SYS_CREATE) {
-        f->eax = filesys_create((char *) args[1], args[2]);
+        if (!is_valid((void *) args + 1, cur) || !is_valid((void *) args + 2, cur)) {
+          lock_release(&file_lock);
+          printf ("%s: exit(%d)\n", (char *) &thread_current ()->name, -1);
+          thread_exit ();
+        }
+        if (!is_valid((void *) args[1], cur) || args[1] == 0) {
+          lock_release(&file_lock);
+          printf ("%s: exit(%d)\n", (char *) &thread_current ()->name, -1);
+          thread_exit ();
+        }
+        int n = 0;
+        int m = 50;
+        char *tmp = (char *) args[1];
+        while (*(tmp + n) != '\0' && n < m) {
+          if (!is_valid((void *) args[1] + n, cur)) {
+            f->eax = false;
+            goto release;
+          }
+          n ++;
+        }
+        char file_name[n];
+        memcpy((char *) file_name, (char *) args[1], n + 1);
+        f->eax = filesys_create((char *) file_name, args[2]);
       } else if (args[0] == SYS_REMOVE) {
+        if (!is_valid((void *) args + 1, cur)) {
+          lock_release(&file_lock);
+          printf ("%s: exit(%d)\n", (char *) &thread_current ()->name, -1);
+          thread_exit ();
+        }
+        if (!is_valid((void *) args[1], cur) || args[1] == 0) {
+          lock_release(&file_lock);
+          printf ("%s: exit(%d)\n", (char *) &thread_current ()->name, -1);
+          thread_exit ();
+        }
+        int n = 0;
+        int m = 50;
+        char *tmp = (char *) args[1];
+        while (*(tmp + n) != '\0' && n < m) {
+          if (!is_valid((void *) args[1] + n, cur)) {
+            f->eax = false;
+            goto release;
+          }
+          n ++;
+        }
+        char file_name[n];
+        memcpy((char *) file_name, (char *) args[1], n + 1);
         f->eax = filesys_remove((char *) args[1]);
       } else if (args[0] == SYS_OPEN) {
-        struct file* fp = filesys_open((char *) args[1]);
+        if (!is_valid((void *) args + 1, cur)) {
+          lock_release(&file_lock);
+          printf ("%s: exit(%d)\n", (char *) &thread_current ()->name, -1);
+          thread_exit ();
+        }
+        if (!is_valid((void *) args[1], cur) || args[1] == 0) {
+          lock_release(&file_lock);
+          printf ("%s: exit(%d)\n", (char *) &thread_current ()->name, -1);
+          thread_exit ();
+        }
+        int n = 0;
+        int m = 50;
+        char *tmp = (char *) args[1];
+        while (*(tmp + n) != '\0' && n < m) {
+          if (!is_valid((void *) args[1] + n, cur)) {
+            f->eax = false;
+            goto release;
+          }
+          n ++;
+        }
+        char file_name[n];
+        memcpy((char *) file_name, (char *) args[1], n + 1);
+        struct file* fp = filesys_open(file_name);
+        if (fp == NULL) {
+          f->eax = -1;
+          goto release;
+        }
         int fd = 2;
         while (fd < 128) {
-          if (file_descriptors[fd] == NULL) {
-            file_descriptors[fd] = fp;
+          if (cur->file_descriptors[fd] == NULL) {
+            cur->file_descriptors[fd] = fp;
             break;
           }
           fd ++;
         }
         if (fd == 128) {
           f->eax = -1;
+          goto release;
         }
         f->eax = fd;
       } else if (args[0] == SYS_FILESIZE) {
-        f->eax= file_length(file_descriptors[args[1]]);
-      } else if (args[0] == SYS_READ) {
-        f->eax = file_read(file_descriptors[args[1]], (void *) args[2], args[3]);
-      } else if (args[0] == SYS_WRITE) {
-        if (args[1] == 1) {
-          printf("%s", (char *) args[2]);
-          f->eax = args[3];
-        } else {
-          f->eax = file_write(file_descriptors[args[1]], (void *) args[2], args[3]);
+        if (!is_valid((void *) args + 1, cur)) {
+          lock_release(&file_lock);
+          printf ("%s: exit(%d)\n", (char *) &thread_current ()->name, -1);
+          thread_exit ();
         }
+        int fd = args[1];
+        if (fd < 2 ||fd > 127) {
+          f->eax = 0;
+          goto release;
+        }
+        f->eax = file_length(cur->file_descriptors[args[1]]);
+      } else if (args[0] == SYS_READ) {
+        if (!is_valid((void *) args + 1, cur) || !is_valid((void *) args + 2, cur) || !is_valid((void *) args + 3, cur)) {
+          lock_release(&file_lock);
+          printf ("%s: exit(%d)\n", (char *) &thread_current ()->name, -1);
+          thread_exit ();
+        }
+        if (!is_valid((void *) args[2], cur) || args[2] == 0) {
+          lock_release(&file_lock);
+          printf ("%s: exit(%d)\n", (char *) &thread_current ()->name, -1);
+          thread_exit ();
+        }
+        int n = 0;
+        int size = (int) args[3];
+        char *tmp = (char *) args[2];
+        for (; n < size; n ++) {
+          if (!is_valid((void *) args[2] + n, cur)) {
+            f->eax = -1;
+            goto release;
+          }
+        }
+        char buffer[n];
+        int fd = args[1];
+        /** Read from standard input. */
+        if (fd == 0) {
+          int i;
+          for (i = 0; i < size; i ++) {
+            buffer[i] = input_getc();
+          }
+          f->eax = size;
+          for (i = 0; i < size; i ++) {
+            *(tmp + i) = buffer[i];
+          }
+          goto release;
+        }
+        /** Read from a file descriptor. */
+        if (fd < 2 ||fd > 127 || cur->file_descriptors[args[1]] == NULL) {
+          f->eax = -1;
+          goto release;
+        }
+        f->eax = file_read(cur->file_descriptors[args[1]], buffer, args[3]);
+        if (f->eax > 0) {
+          int j;
+          for (j = 0; j < size; j ++) {
+            *(tmp + j) = buffer[j];
+          }
+        }
+      } else if (args[0] == SYS_WRITE) {
+        if (!is_valid((void *) args + 1, cur) || !is_valid((void *) args + 2, cur) || !is_valid((void *) args + 3, cur)) {
+          lock_release(&file_lock);
+          printf ("%s: exit(%d)\n", (char *) &thread_current ()->name, -1);
+          thread_exit ();
+        }
+        if (!is_valid((void *) args[2], cur) || args[2] == 0) {
+          lock_release(&file_lock);
+          printf ("%s: exit(%d)\n", (char *) &thread_current ()->name, -1);
+          thread_exit ();
+        }
+        int n = 0;
+        int size = (int) args[3];
+        char *tmp = (char *) args[2];
+        for (; n < size ; n ++) {
+          if (!is_valid((void *) args[2] + n, cur)) {
+            f->eax = -1;
+            goto release;
+          }
+        }
+        char buffer[size];
+        memcpy(buffer, tmp, size);
+        int fd = args[1];
+        /* Write to standard output. */
+        if (fd == 1) {
+          int num_buf;
+          if (size % 100 == 0) {
+            num_buf = size / 100;
+          } else {
+            num_buf = size / 100 + 1;
+          }
+          char smaller_buf[100];
+          int i = 0;
+          for (; i < num_buf; i ++) {
+            if (i == num_buf - 1) {
+              memcpy(smaller_buf, buffer + i * 100, size - i * 100);
+              putbuf(smaller_buf, size - i * 100);
+            } else {
+              memcpy(smaller_buf, buffer + i * 100, 100);
+              putbuf(smaller_buf, 100);
+            }
+          }
+          goto release;
+        }
+        /* Write to a file. */
+        if (fd < 2 ||fd > 127 || cur->file_descriptors[args[1]] == NULL) {
+          f->eax = -1;
+          goto release;
+        }
+        f->eax = file_write(cur->file_descriptors[args[1]], buffer, size);
       } else if (args[0] == SYS_SEEK) {
-        file_seek(file_descriptors[args[1]], args[2]);
+        if (!is_valid((void *) args + 1, cur) || !is_valid((void *) args + 2, cur)) {
+          lock_release(&file_lock);
+          printf ("%s: exit(%d)\n", (char *) &thread_current ()->name, -1);
+          thread_exit ();
+        }
+        if (args[1] < 2 || args[1] > 127 || cur->file_descriptors[args[1]] == NULL) {
+          goto release;
+        }
+        file_seek(cur->file_descriptors[args[1]], args[2]);
       } else if (args[0] == SYS_TELL) {
-        f->eax = file_tell(file_descriptors[args[1]]);
+        if (!is_valid((void *) args + 1, cur)) {
+          lock_release(&file_lock);
+          printf ("%s: exit(%d)\n", (char *) &thread_current ()->name, -1);
+          thread_exit ();
+        }
+        if (args[1] < 2 || args[1] > 127 || cur->file_descriptors[args[1]] == NULL) {
+          f->eax = 0;
+          goto release;
+        }
+        f->eax = file_tell(cur->file_descriptors[args[1]]);
       } else if (args[0] == SYS_CLOSE) {
-        file_close(file_descriptors[args[1]]);
-        file_descriptors[args[1]] = NULL;
+        if (!is_valid((void *) args + 1, cur)) {
+          lock_release(&file_lock);
+          printf ("%s: exit(%d)\n", (char *) &thread_current ()->name, -1);
+          thread_exit ();
+        }
+        if (args[1] < 2 || args[1] > 127 || cur->file_descriptors[args[1]] == NULL) {
+          goto release;
+        }
+        file_close(cur->file_descriptors[args[1]]);
+        cur->file_descriptors[args[1]] = NULL;
       }
 
 
-      lock_release(&file_lock);
+      release:
+        lock_release(&file_lock);
     }
 
 }

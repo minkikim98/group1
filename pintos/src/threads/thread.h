@@ -94,6 +94,12 @@ struct thread
     struct list_elem allelem;           /* List element for all threads list. */
     struct wait_status *o_wait_status;
 
+    /* Project 0 Task 3
+    */
+    struct file *file_descriptors[128];
+    struct file *current_process;
+
+
     /* Shared between thread.c and synch.c. */
     struct list_elem elem;              /* List element. */
 
