@@ -72,6 +72,15 @@ syscall_handler (struct intr_frame *f UNUSED)
     }
     return !is_valid(user_p, thread_current());
   }
+  bool is_bad_str(void *user_p)
+  {
+    while (!is_bad_p_byte(user_p))
+    {
+      if (*((char *) user_p) == '\0') return false;
+      user_p++;
+    }
+    return true;
+  }
   bool is_bad_fp(void *user_p)
   {
     for (int i = 0; i < 4; i ++)
@@ -135,9 +144,10 @@ syscall_handler (struct intr_frame *f UNUSED)
   if (args[0] == SYS_EXEC) {
     // Verify that user-given pointer is valid; if not, return -1 and exit
     struct thread *cur = thread_current();
-    if (!is_valid((void *) args[1], cur))
+    if (is_bad_fp(&args[1]) || is_bad_str(args[1]))
     {
       f->eax = -1;
+      printf ("%s: exit(%d)\n", &thread_current ()->name, -1);
       thread_exit();
     }
     else
