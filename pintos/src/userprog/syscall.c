@@ -104,7 +104,8 @@ syscall_handler (struct intr_frame *f UNUSED)
     }
     else
     {
-      process_execute((char *) args[1]); 
+      f->eax = process_execute((char *) args[1]); 
+      //thread_exit();
     }
   }
 
