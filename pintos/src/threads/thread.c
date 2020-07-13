@@ -507,7 +507,6 @@ init_thread (struct thread *t, const char *name, int priority)
 
   /* Mabel allocations below (not sure whether they should go): */
   list_init(&(t->o_children_wait_status_list)); //mabel, Do list init
-  printf("inited list: len %d\n", list_size(&(t->o_children_wait_status_list)));
   // t->o_wait_status = my_wait_status;
   /* End allocations */
 
@@ -636,7 +635,6 @@ void wait_status_mod_ref(struct wait_status* wait_status, int delta)
 
   if (shouldFree)
   {
-    printf("Freed wait_status of tid: %d\n", wait_status->o_tid);
     free(wait_status);
   }
 }

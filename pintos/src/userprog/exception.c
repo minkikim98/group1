@@ -81,6 +81,8 @@ kill (struct intr_frame *f)
 
   /* The interrupt frame's code segment value tells us where the
      exception originated. */
+  struct thread * curThread = thread_current();
+  curThread->o_wait_status->o_kernel_killed = 1;
   switch (f->cs)
     {
     case SEL_UCSEG:
