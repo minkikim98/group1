@@ -50,9 +50,9 @@ syscall_handler (struct intr_frame *f UNUSED)
     // Check if user pointer is NULL
     if (user_p == NULL) return NULL;
 
-    // TODO 
+    // TODO
     // if (size == NULL) {
-      
+
     // }
     // else {
 
@@ -93,7 +93,8 @@ syscall_handler (struct intr_frame *f UNUSED)
   }
 
   if (args[0] == SYS_WAIT) {
-
+      //No need to check pointers because it's an int
+      f->eax = process_wait(args[1]); //assuming args[1] is the child tid
   }
 
   if (args[0] == SYS_CREATE
