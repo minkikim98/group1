@@ -15,6 +15,7 @@
 #include "threads/vaddr.h"
 #include "devices/shutdown.h"
 #include "userprog/pagedir.h"
+#include "userprog/process.h"
 
 static void syscall_handler (struct intr_frame *);
 struct lock file_lock;
@@ -66,9 +67,9 @@ syscall_handler (struct intr_frame *f UNUSED)
     // Check if user pointer is NULL
     if (user_p == NULL) return NULL;
 
-    // TODO 
+    // TODO
     // if (size == NULL) {
-      
+
     // }
     // else {
 
@@ -95,21 +96,22 @@ syscall_handler (struct intr_frame *f UNUSED)
   // cloudnube
   if (args[0] == SYS_EXEC) {
     // Verify that user-given pointer is valid; if not, return -1 and exit
-    char *file = verify_p(args[1]);
-    if (file == NULL)
+    struct thread *cur = thread_current();
+    if (!is_valid((void *) args[1], cur))
     {
       f->eax = -1;
       thread_exit();
     }
     else
     {
-      process_execute(file);
+      f->eax = process_execute((char *) args[1]); 
+      //thread_exit();
     }
-
   }
 
   if (args[0] == SYS_WAIT) {
-
+      //No need to check pointers because it's an int
+      f->eax = process_wait(args[1]); //assuming args[1] is the child tid
   }
 
 

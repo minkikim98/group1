@@ -305,6 +305,7 @@ thread_tid (void)
 void
 thread_exit (void)
 {
+  //printf("thread_exit\n");
   ASSERT (!intr_context ());
 #ifdef USERPROG
   process_exit ();
@@ -313,6 +314,7 @@ thread_exit (void)
   /* Remove thread from all threads list, set our status to dying,
      and schedule another process.  That process will destroy us
      when it calls thread_schedule_tail(). */
+  //printf("thread_exit intr_disable\n");
   intr_disable ();
   list_remove (&thread_current()->allelem);
 
@@ -321,7 +323,7 @@ thread_exit (void)
   //   wait_status_mod_ref(t->o_wait_status, -1);
   // }
   // thread_foreach(thread_action_func, NULL);
-
+  //printf("thread_exit list_elem\n");
   struct list_elem *e;
   struct thread *curThread = thread_current();
 
@@ -329,10 +331,12 @@ thread_exit (void)
   for (e = list_begin (&curThread->o_children_wait_status_list); e != list_end (&curThread->o_children_wait_status_list);
        e = list_next (e))
   {
+ //printf("thread_exit wait_status\n");
     struct wait_status *ws = list_entry (e, struct wait_status, wselem);
-    printf("thread tid: %d\n", ws->o_tid);
+    //printf("thread tid: %d\n", ws->o_tid);
     wait_status_mod_ref(ws, -1);
   }
+  //printf("thread_exit wait_status_mod_ref\n");
 
   // Zack: Decrement this process's wait_status ref
   wait_status_mod_ref(curThread->o_wait_status, -1);
