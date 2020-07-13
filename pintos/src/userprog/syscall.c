@@ -15,6 +15,7 @@
 #include "threads/vaddr.h"
 #include "devices/shutdown.h"
 #include "userprog/pagedir.h"
+#include "userprog/process.h"
 
 static void syscall_handler (struct intr_frame *);
 struct lock file_lock;
@@ -103,7 +104,7 @@ syscall_handler (struct intr_frame *f UNUSED)
     }
     else
     {
-      process_execute(file);
+      process_execute((char *) args[1]); 
     }
   }
 
