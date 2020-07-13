@@ -95,8 +95,8 @@ syscall_handler (struct intr_frame *f UNUSED)
   // cloudnube
   if (args[0] == SYS_EXEC) {
     // Verify that user-given pointer is valid; if not, return -1 and exit
-    char *file = verify_p(args[1]);
-    if (file == NULL)
+    struct thread *cur = thread_current();
+    if (!is_valid((void *) args[1], cur))
     {
       f->eax = -1;
       thread_exit();
@@ -105,7 +105,6 @@ syscall_handler (struct intr_frame *f UNUSED)
     {
       process_execute(file);
     }
-
   }
 
   if (args[0] == SYS_WAIT) {
