@@ -62,7 +62,7 @@ syscall_handler (struct intr_frame *f UNUSED)
   // cloudnube
   bool is_bad_p_byte(void *user_p)
   {
-    if (user_p < PHYS_BASE)
+    if (user_p >= PHYS_BASE)
     {
       return true;
     }
