@@ -119,10 +119,12 @@ struct wait_status { //mabel
   uint32_t o_exit_code; //it can also be an int //mabel
   uint32_t o_reference_count; //mabel
   struct lock o_reference_count_lock; //mabel
-  struct list_elem elem; //it may have to be put in a list //mabel
+  struct list_elem wselem; //it may have to be put in a list //mabel
   uint8_t o_kernel_killed; //mabel
 }; //mabel
 
+/* THe good stuff. */
+void wait_status_mod_ref(struct wait_status* wait_status, int delta);
 
 
 /* If false (default), use round-robin scheduler.
