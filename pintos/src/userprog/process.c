@@ -19,7 +19,8 @@
 #include "threads/thread.h"
 #include "threads/vaddr.h"
 
-static struct semaphore temporary;
+static struct semaphore my_load_semaphore;
+static bool my_load_succeed;
 static thread_func start_process NO_RETURN;
 static bool load (const char *cmdline, void (**eip) (void), void **esp);
 
@@ -33,7 +34,7 @@ process_execute (const char *file_name)
   char *fn_copy;
   tid_t tid;
 
-  sema_init (&temporary, 0);
+  sema_init (&my_load_semaphore, 0);
   /* Make a copy of FILE_NAME.
      Otherwise there's a race between the caller and load(). */
   fn_copy = palloc_get_page (0);
@@ -46,8 +47,10 @@ process_execute (const char *file_name)
   if (tid == TID_ERROR)
     palloc_free_page (fn_copy);
 
+  sema_down(&my_load_semaphore);
+  //printf("Load succeed? %d\n", my_load_succeed);
   //struct thread my_current_thread = thread_current();
-  return tid;
+  return my_load_succeed ? tid : -1;
 }
 
 /* A thread function that loads a user process and starts it
@@ -126,10 +129,19 @@ start_process (void *file_name_)
   }
 
   /* If load failed, quit. */
-  load_stack();
+  if (success)
+    load_stack();
   palloc_free_page (file_name);
+  my_load_succeed = success;
   if (!success)
+  {
+    sema_up(&my_load_semaphore);
+    //printf("sema up s\n");
     thread_exit ();
+    NOT_REACHED ();
+  }
+  sema_up(&my_load_semaphore);
+    //printf("sema up f\n");
   /* Start the user process by simulating a return from an
      interrupt, implemented by intr_exit (in
      threads/intr-stubs.S).  Because intr_exit takes all of its
@@ -155,6 +167,7 @@ start_process (void *file_name_)
 int
 process_wait (tid_t child_tid)
 { //mabel (this whole function minus the skeleton)
+  //printf("Process_wait called by %d\n", thread_current()->tid);
   struct thread * t = thread_current(); //mabel (will this give you the current thread?)
   struct list_elem *e;
   struct wait_status *my_wait_status = thread_get_wait_status(t, child_tid);
@@ -162,7 +175,9 @@ process_wait (tid_t child_tid)
   {
     return -1;
   }
+  printf("sema_down caller: %d, tid: %d\n", thread_current()->tid, my_wait_status->o_tid);
   sema_down(&my_wait_status->o_sem_exited);
+  printf("sema_down over tid: %d\n", my_wait_status->o_tid);
   int exit_code = my_wait_status->o_kernel_killed ? -1 : (int) my_wait_status->o_exit_code;
   list_remove(&my_wait_status->wselem);
   wait_status_mod_ref(my_wait_status, -1);
@@ -173,6 +188,7 @@ process_wait (tid_t child_tid)
 void
 process_exit (void)
 {
+  //printf("Process_exit called by %d\n", thread_current()->tid);
   struct thread *cur = thread_current ();
   uint32_t *pd;
 
@@ -205,6 +221,7 @@ process_exit (void)
     }
   struct wait_status *my_wait_status = cur->o_wait_status;
   sema_up (&my_wait_status->o_sem_exited);
+  printf("sema_up caller: %d, ws tid: %d\n", thread_current()->tid, my_wait_status->o_tid);
 }
 
 /* Sets up the CPU for running user code in the current
@@ -408,6 +425,7 @@ load (const char *file_name, void (**eip) (void), void **esp)
 
  done:
   /* We arrive here whether the load is successful or not. */
+ //printf("Returning from load: %d\n", success);
   return success;
 }
 

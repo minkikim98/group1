@@ -307,9 +307,11 @@ thread_exit (void)
 {
   //printf("thread_exit\n");
   ASSERT (!intr_context ());
+  //printf("Exiting thraed of tid: %d\n", thread_current()->tid);
 #ifdef USERPROG
   process_exit ();
 #endif
+  //printf("Exiting procedd of tid: %d\n", thread_current()->tid);
 
   /* Remove thread from all threads list, set our status to dying,
      and schedule another process.  That process will destroy us
@@ -317,7 +319,6 @@ thread_exit (void)
   //printf("thread_exit intr_disable\n");
   intr_disable ();
   list_remove (&thread_current()->allelem);
-
   // void thread_action_func (struct thread *t, void *aux)
   // {
   //   wait_status_mod_ref(t->o_wait_status, -1);
@@ -328,18 +329,20 @@ thread_exit (void)
   struct thread *curThread = thread_current();
 
   // Zack: Decrement this process's chidren's wait_status ref
-  for (e = list_begin (&curThread->o_children_wait_status_list); e != list_end (&curThread->o_children_wait_status_list);
-       e = list_next (e))
+  //printf("thread_exit begin dec procedd of tid: %d, len: %d\n", thread_current()->tid, list_size(&thread_current()->o_children_wait_status_list));
+  //printf("Thread_exit on tid: %d\n", thread_current()->tid);
+  while (list_size(&thread_current()->o_children_wait_status_list) != 0)
   {
- //printf("thread_exit wait_status\n");
-    struct wait_status *ws = list_entry (e, struct wait_status, wselem);
-    //printf("thread tid: %d\n", ws->o_tid);
+    struct wait_status *ws = list_entry (list_pop_front(&thread_current()->o_children_wait_status_list), struct wait_status, wselem);
     wait_status_mod_ref(ws, -1);
   }
+  //printf("Thread_exit  after loop on tid: %d\n", thread_current()->tid);
+  //printf("thread_exit wait_status_mod_ref procedd of tid: %d\n", thread_current()->tid);
   //printf("thread_exit wait_status_mod_ref\n");
 
   // Zack: Decrement this process's wait_status ref
   wait_status_mod_ref(curThread->o_wait_status, -1);
+  //printf("Thread_exit  after wait_status_mod_ref on tid: %d\n", thread_current()->tid);
 
   thread_current ()->status = THREAD_DYING;
   schedule ();
@@ -608,10 +611,11 @@ schedule (void)
   struct thread *next = next_thread_to_run ();
   struct thread *prev = NULL;
 
+  //printf("schedule before asserts tid: %d\n", thread_current()->tid);
   ASSERT (intr_get_level () == INTR_OFF);
   ASSERT (cur->status != THREAD_RUNNING);
   ASSERT (is_thread (next));
-
+  //printf("schedule after asserts tid: %d\n", thread_current()->tid);
   if (cur != next)
     prev = switch_threads (cur, next);
   thread_schedule_tail (prev);

@@ -57,19 +57,9 @@ syscall_handler (struct intr_frame *f UNUSED)
    */
 
   /* printf("System call number: %d\n", args[0]); */
-
-  //Helper function to verify user-provided pointers.
-  // cloudnube
-  bool is_bad_p_byte(void *user_p)
+  //printf("syscall_handler called by %d\n", thread_current()->tid);
+  inline bool is_bad_p_byte(void *user_p)
   {
-    if (user_p >= PHYS_BASE)
-    {
-      return true;
-    }
-    if (user_p == 0)
-    {
-      return true;
-    }
     return !is_valid(user_p, thread_current());
   }
   bool is_bad_str(void *user_p)
@@ -86,80 +76,62 @@ syscall_handler (struct intr_frame *f UNUSED)
     for (int i = 0; i < 4; i ++)
     {
       if (is_bad_p_byte(user_p + i))
+        //printf("Checked bad: %04p\n", user_p);
         return true;
     }
     return false;
   }
-  void *verify_p(void *user_p) {
-    // Check if user pointer is below PHYS_BASE
-    if (!is_user_vaddr(user_p)) return NULL;
 
-    // Check if user pointer is NULL
-    if (user_p == NULL) return NULL;
-
-    // TODO
-    // if (size == NULL) {
-
-    // }
-    // else {
-
-    // }
-    return user_p;// WILL CHANGE!!! pagedir_get_page(user_p);
-  }
-
-  if (is_bad_fp(args))
+  void exit_with_code(int exit_code)
   {
-    printf ("%s: exit(%d)\n", &thread_current ()->name, -1);
+    thread_current()->o_wait_status->o_exit_code = exit_code;
+    printf ("%s: exit(%d)\n", &thread_current ()->name, exit_code);
     thread_exit();
-    return;
   }
-  //printf("arg adress: %04p\n", args);
+  void exit_error(void)
+  {
+    exit_with_code(-1);
+  }
+  inline void exit_if_bad_arg(int i)
+  {
+    if (is_bad_fp(&args[i])) exit_error();
+  }
+  inline void exit_if_bad_str(char* str)
+  {
+    if (is_bad_str(str)) exit_error();
+  }
+
+  exit_if_bad_arg(0);
   if (args[0] == SYS_PRACTICE) {
+    exit_if_bad_arg(1);
     f->eax = args[1] + 1;
+    return;
   }
 
   if (args[0] == SYS_HALT) {
-    // Should free all memory and locks?
-    printf("Haling?\n");
     shutdown_power_off();
   }
 
   if (args[0] == SYS_EXIT) {
+    exit_if_bad_arg(1);
+    printf("System exit number tid: %d\n", thread_current()->tid);
     f->eax = args[1];
-    int code;
-    if (is_bad_fp(&args[1]))
-    {
-      code = -1;
-    }
-    else
-    {
-      code = args[1];
-    }
-    thread_current()->o_wait_status->o_exit_code = code;
-    printf ("%s: exit(%d)\n", &thread_current ()->name, code);
-    thread_exit ();
+    exit_with_code(args[1]);
   }
 
   // cloudnube
   if (args[0] == SYS_EXEC) {
     // Verify that user-given pointer is valid; if not, return -1 and exit
-    struct thread *cur = thread_current();
-    if (is_bad_fp(&args[1]) || is_bad_str(args[1]))
-    {
-      f->eax = -1;
-      printf ("%s: exit(%d)\n", &thread_current ()->name, -1);
-      thread_exit();
-    }
-    else
-    {
-      f->eax = process_execute((char *) args[1]); 
-      //thread_exit();
-    }
+    exit_if_bad_arg(1);
+    exit_if_bad_str(args[1]);
+    f->eax = process_execute((char *) args[1]);
+    return;
   }
 
   if (args[0] == SYS_WAIT) {
-      //No need to check pointers because it's an int
-      f->eax = process_wait(args[1]); //assuming args[1] is the child tid
+    //No need to check pointers because it's an int
+    exit_if_bad_arg(1);
+    f->eax = process_wait(args[1]); //assuming args[1] is the child tid
   }
 
 
@@ -177,18 +149,16 @@ syscall_handler (struct intr_frame *f UNUSED)
     || args[0] == SYS_CLOSE) {
 
       lock_acquire(&file_lock);
-      struct thread *cur = thread_current();
+      struct thread *cur = thread_current ();
 
       if (args[0] == SYS_CREATE) {
         if (!is_valid((void *) args + 1, cur) || !is_valid((void *) args + 2, cur)) {
           lock_release(&file_lock);
-          printf ("%s: exit(%d)\n", (char *) &thread_current ()->name, -1);
-          thread_exit ();
+          exit_with_code(-1);
         }
         if (!is_valid((void *) args[1], cur) || args[1] == 0) {
           lock_release(&file_lock);
-          printf ("%s: exit(%d)\n", (char *) &thread_current ()->name, -1);
-          thread_exit ();
+          exit_with_code(-1);
         }
         int n = 0;
         int m = 50;
@@ -206,13 +176,11 @@ syscall_handler (struct intr_frame *f UNUSED)
       } else if (args[0] == SYS_REMOVE) {
         if (!is_valid((void *) args + 1, cur)) {
           lock_release(&file_lock);
-          printf ("%s: exit(%d)\n", (char *) &thread_current ()->name, -1);
-          thread_exit ();
+          exit_with_code(-1);
         }
         if (!is_valid((void *) args[1], cur) || args[1] == 0) {
           lock_release(&file_lock);
-          printf ("%s: exit(%d)\n", (char *) &thread_current ()->name, -1);
-          thread_exit ();
+          exit_with_code(-1);
         }
         int n = 0;
         int m = 50;
@@ -230,13 +198,11 @@ syscall_handler (struct intr_frame *f UNUSED)
       } else if (args[0] == SYS_OPEN) {
         if (!is_valid((void *) args + 1, cur)) {
           lock_release(&file_lock);
-          printf ("%s: exit(%d)\n", (char *) &thread_current ()->name, -1);
-          thread_exit ();
+          exit_with_code(-1);
         }
         if (!is_valid((void *) args[1], cur) || args[1] == 0) {
           lock_release(&file_lock);
-          printf ("%s: exit(%d)\n", (char *) &thread_current ()->name, -1);
-          thread_exit ();
+          exit_with_code(-1);
         }
         int n = 0;
         int m = 50;
@@ -271,8 +237,7 @@ syscall_handler (struct intr_frame *f UNUSED)
       } else if (args[0] == SYS_FILESIZE) {
         if (!is_valid((void *) args + 1, cur)) {
           lock_release(&file_lock);
-          printf ("%s: exit(%d)\n", (char *) &thread_current ()->name, -1);
-          thread_exit ();
+          exit_with_code(-1);
         }
         int fd = args[1];
         if (fd < 2 ||fd > 127) {
@@ -283,13 +248,11 @@ syscall_handler (struct intr_frame *f UNUSED)
       } else if (args[0] == SYS_READ) {
         if (!is_valid((void *) args + 1, cur) || !is_valid((void *) args + 2, cur) || !is_valid((void *) args + 3, cur)) {
           lock_release(&file_lock);
-          printf ("%s: exit(%d)\n", (char *) &thread_current ()->name, -1);
-          thread_exit ();
+          exit_with_code(-1);
         }
         if (!is_valid((void *) args[2], cur) || args[2] == 0) {
           lock_release(&file_lock);
-          printf ("%s: exit(%d)\n", (char *) &thread_current ()->name, -1);
-          thread_exit ();
+          exit_with_code(-1);
         }
         int n = 0;
         int size = (int) args[3];
@@ -329,13 +292,11 @@ syscall_handler (struct intr_frame *f UNUSED)
       } else if (args[0] == SYS_WRITE) {
         if (!is_valid((void *) args + 1, cur) || !is_valid((void *) args + 2, cur) || !is_valid((void *) args + 3, cur)) {
           lock_release(&file_lock);
-          printf ("%s: exit(%d)\n", (char *) &thread_current ()->name, -1);
-          thread_exit ();
+          exit_with_code(-1);
         }
         if (!is_valid((void *) args[2], cur) || args[2] == 0) {
           lock_release(&file_lock);
-          printf ("%s: exit(%d)\n", (char *) &thread_current ()->name, -1);
-          thread_exit ();
+          exit_with_code(-1);
         }
         int n = 0;
         int size = (int) args[3];
@@ -379,8 +340,7 @@ syscall_handler (struct intr_frame *f UNUSED)
       } else if (args[0] == SYS_SEEK) {
         if (!is_valid((void *) args + 1, cur) || !is_valid((void *) args + 2, cur)) {
           lock_release(&file_lock);
-          printf ("%s: exit(%d)\n", (char *) &thread_current ()->name, -1);
-          thread_exit ();
+          exit_with_code(-1);
         }
         if (args[1] < 2 || args[1] > 127 || cur->file_descriptors[args[1]] == NULL) {
           goto release;
@@ -389,8 +349,7 @@ syscall_handler (struct intr_frame *f UNUSED)
       } else if (args[0] == SYS_TELL) {
         if (!is_valid((void *) args + 1, cur)) {
           lock_release(&file_lock);
-          printf ("%s: exit(%d)\n", (char *) &thread_current ()->name, -1);
-          thread_exit ();
+          exit_with_code(-1);
         }
         if (args[1] < 2 || args[1] > 127 || cur->file_descriptors[args[1]] == NULL) {
           f->eax = 0;
@@ -400,8 +359,7 @@ syscall_handler (struct intr_frame *f UNUSED)
       } else if (args[0] == SYS_CLOSE) {
         if (!is_valid((void *) args + 1, cur)) {
           lock_release(&file_lock);
-          printf ("%s: exit(%d)\n", (char *) &thread_current ()->name, -1);
-          thread_exit ();
+          exit_with_code(-1);
         }
         if (args[1] < 2 || args[1] > 127 || cur->file_descriptors[args[1]] == NULL) {
           goto release;
