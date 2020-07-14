@@ -114,7 +114,7 @@ syscall_handler (struct intr_frame *f UNUSED)
 
   if (args[0] == SYS_EXIT) {
     exit_if_bad_arg(1);
-    printf("System exit number tid: %d\n", thread_current()->tid);
+    //printf("System exit number tid: %d\n", thread_current()->tid);
     f->eax = args[1];
     exit_with_code(args[1]);
   }

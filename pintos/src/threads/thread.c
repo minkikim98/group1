@@ -342,7 +342,7 @@ thread_exit (void)
 
   // Zack: Decrement this process's wait_status ref
   wait_status_mod_ref(curThread->o_wait_status, -1);
-  //printf("Thread_exit  after wait_status_mod_ref on tid: %d\n", thread_current()->tid);
+  //printf("Thread_exit  after wait_status_mod_ref on tid: %d, name: %s\n", thread_current()->tid, thread_current()->name);
 
   thread_current ()->status = THREAD_DYING;
   schedule ();
