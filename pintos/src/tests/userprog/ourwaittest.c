@@ -1,14 +1,14 @@
 /* INSTRUCTIONS:
     Our wait test.
     Tests failure of the wait syscall on an attempted
-    grandchild wait if the child that spawned the grandchild has died.  */
+    grandchild wait if the child that spawned the grandchild has died.
+    Relevant files: this file (ourwaittest.c), child.c, child-simple.c and ourwaittest.ck. */
 
 #include <syscall.h>
 #include "tests/lib.h"
 #include "tests/main.h"
 #include <string.h>
-#include "tests/userprog/boundary.h"
-#include "tests/userprog/sample1.inc"
+
 
 
 void
