@@ -5,7 +5,7 @@ tests/%.output: PUTFILES = $(filter-out kernel.bin loader.bin, $^)
 
 
 tests/userprog_TESTS = $(addprefix tests/userprog/,do-nothing           \
-stack-align-0 args-none args-single args-multiple args-many             \
+stack-align-0 args-zac args-none args-single args-multiple args-many             \
 args-dbl-space sc-bad-sp sc-bad-arg sc-boundary sc-boundary-2           \
 sc-boundary-3 halt exit create-normal create-empty create-null          \
 create-bad-ptr create-long create-exists create-bound open-normal       \
@@ -18,12 +18,13 @@ exec-bound-2 exec-bound-3 exec-multiple exec-missing exec-bad-ptr       \
 wait-simple wait-twice wait-killed wait-bad-pid multi-recurse           \
 multi-child-fd rox-simple rox-child rox-multichild bad-read bad-write   \
 bad-read2 bad-write2 bad-jump bad-jump2 iloveos practice stack-align-1  \
-stack-align-2 stack-align-3 stack-align-4, ourwaittest)
+stack-align-2 stack-align-3 stack-align-4 ourwaittest task3-offset)
 
 #added a thing here ("child")
 tests/userprog_PROGS = $(tests/userprog_TESTS) $(addprefix \
 tests/userprog/,child-simple child child-args child-bad child-close child-rox)
 
+tests/userprog/task3-offset_SRC = tests/userprog/task3-offset.c tests/main.c
 tests/userprog/iloveos_SRC = tests/userprog/iloveos.c tests/main.c
 tests/userprog/practice_SRC = tests/userprog/practice.c tests/main.c
 tests/userprog/do-nothing_SRC = tests/userprog/do-nothing.c
@@ -33,6 +34,7 @@ tests/userprog/stack-align-2_SRC = tests/userprog/stack-align.c
 tests/userprog/stack-align-3_SRC = tests/userprog/stack-align.c
 tests/userprog/stack-align-4_SRC = tests/userprog/stack-align.c
 tests/userprog/args-none_SRC = tests/userprog/args.c
+tests/userprog/args-zac_SRC = tests/userprog/args.c
 tests/userprog/args-single_SRC = tests/userprog/args.c
 tests/userprog/args-multiple_SRC = tests/userprog/args.c
 tests/userprog/args-many_SRC = tests/userprog/args.c
@@ -125,6 +127,7 @@ tests/userprog/child-rox_SRC = tests/userprog/child-rox.c
 
 $(foreach prog,$(tests/userprog_PROGS),$(eval $(prog)_SRC += tests/lib.c))
 
+tests/userprog/args-zac_ARGS = I am absolutely the most op person in the existance of all comprehension in its entirety.
 tests/userprog/stack-align-2_ARGS = a
 tests/userprog/stack-align-3_ARGS = ab
 tests/userprog/stack-align-4_ARGS = ab cd
@@ -150,6 +153,7 @@ tests/userprog/write-zero_PUTFILES += tests/userprog/sample.txt
 tests/userprog/multi-child-fd_PUTFILES += tests/userprog/sample.txt
 #added
 #tests/userprog/ourwaittest_PUTFILES += tests/userprog/testgrandchild.txt
+tests/userprog/task3-offset_PUTFILES += tests/userprog/alphabet.txt
 
 tests/userprog/exec-once_PUTFILES += tests/userprog/child-simple
 tests/userprog/exec-multiple_PUTFILES += tests/userprog/child-simple
