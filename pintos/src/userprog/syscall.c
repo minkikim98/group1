@@ -127,7 +127,7 @@ syscall_handler (struct intr_frame *f UNUSED)
   }
 
   // cloudnube
-  if (args[0] == SYS_EXEC) {
+  /*if (args[0] == SYS_EXEC) {
     // Verify that user-given pointer is valid; if not, return -1 and exit
     exit_if_bad_arg(1);
     exit_if_bad_str(args[1]);
@@ -138,7 +138,7 @@ syscall_handler (struct intr_frame *f UNUSED)
     file_allow_write(file_name);
     lock_release(&file_lock);
     return;
-  }
+  }*/
 
   if (args[0] == SYS_WAIT) {
     //No need to check pointers because it's an int
@@ -216,7 +216,8 @@ syscall_handler (struct intr_frame *f UNUSED)
     || args[0] == SYS_WRITE
     || args[0] == SYS_SEEK
     || args[0] == SYS_TELL
-    || args[0] == SYS_CLOSE) {
+    || args[0] == SYS_CLOSE
+    || args[0] == SYS_EXEC) {
 
       lock_acquire(&file_lock);
       struct thread *cur = thread_current ();
@@ -245,7 +246,7 @@ syscall_handler (struct intr_frame *f UNUSED)
             goto release;
           }
         }
-        char buffer[n];
+        char *buffer = (char *) args[2];
         int fd = args[1];
         /** Read from standard input. */
         if (fd == 0) {
@@ -265,12 +266,6 @@ syscall_handler (struct intr_frame *f UNUSED)
           goto release;
         }
         f->eax = file_read(cur->file_descriptors[args[1]], buffer, args[3]);
-        if (f->eax > 0) {
-          int j;
-          for (j = 0; j < size; j ++) {
-            *(tmp + j) = buffer[j];
-          }
-        }
       } else if (args[0] == SYS_WRITE) {
         exit_release_if_bad_arg(1);
         exit_release_if_bad_arg(2);
@@ -281,15 +276,13 @@ syscall_handler (struct intr_frame *f UNUSED)
         }
         int n = 0;
         int size = (int) args[3];
-        char *tmp = (char *) args[2];
         for (; n < size ; n ++) {
           if (!is_valid((void *) args[2] + n, cur)) {
             f->eax = -1;
             goto release;
           }
         }
-        char buffer[size];
-        memcpy(buffer, tmp, size);
+        char *buffer = (char *) args[2];
         int fd = args[1];
         /* Write to standard output. */
         if (fd == 1) {
