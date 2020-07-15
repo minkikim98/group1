@@ -13,6 +13,6 @@
 int
 main (void)
 {
-  	pid_t grandchild_id = exec("child-simple"); //returns child simple's pid for the parent to wait on
-    return grandchild_id;
+  pid_t grandchild_id = exec("child-simple"); //returns child simple's pid for the parent to wait on
+  return grandchild_id;
 }
