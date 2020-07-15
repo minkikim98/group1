@@ -127,6 +127,8 @@ struct wait_status {
 // Helper function to modify reference count for our wait struct.
 void wait_status_mod_ref(struct wait_status* wait_status, int delta);
 
+struct wait_status *thread_get_wait_status(struct thread* t, tid_t tid);
+
 
 /* If false (default), use round-robin scheduler.
    If true, use multi-level feedback queue scheduler.

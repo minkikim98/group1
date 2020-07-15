@@ -183,9 +183,8 @@ start_process (void *arg_set_)
 */
 int
 process_wait (tid_t child_tid)
-{ 
+{
   struct thread * t = thread_current(); 
-  struct list_elem *e;
   // Iterates through parent thread's list of child wait statuses to find wait status with matching tid.
   struct wait_status *child_wait_status = thread_get_wait_status(t, child_tid);
   // Invalid tid.
