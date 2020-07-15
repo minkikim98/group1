@@ -96,6 +96,12 @@ syscall_handler (struct intr_frame *f UNUSED)
    */
 
   /* printf("System call number: %d\n", args[0]); */
+
+  /*
+   * Helper functions to check if user-provided pointer is valid. Functions vary 
+   * to account for the type of user pointer provided. 
+   */
+
   inline bool is_bad_p_byte(void *user_p)
   {
     return !is_valid(user_p, thread_current());
@@ -119,6 +125,10 @@ syscall_handler (struct intr_frame *f UNUSED)
     return false;
   }
 
+  /*
+   * Helper functions to exit thread and print an error code message with exit code. 
+   * Some functions can also check conditions, then exit.
+   */ 
   void exit_with_code(int exit_code)
   {
     thread_current()->o_wait_status->o_exit_code = exit_code;
@@ -158,7 +168,7 @@ syscall_handler (struct intr_frame *f UNUSED)
   if (args[0] == SYS_WAIT) {
     //No need to check pointers because it's an int
     exit_if_bad_arg(1);
-    f->eax = process_wait(args[1]); //assuming args[1] is the child tid
+    f->eax = process_wait(args[1]); 
   }
 
 
