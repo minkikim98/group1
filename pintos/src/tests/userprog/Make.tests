@@ -5,7 +5,7 @@ tests/%.output: PUTFILES = $(filter-out kernel.bin loader.bin, $^)
 
 
 tests/userprog_TESTS = $(addprefix tests/userprog/,do-nothing           \
-stack-align-0 args-none args-single args-multiple args-many             \
+stack-align-0 args-zac args-none args-single args-multiple args-many             \
 args-dbl-space sc-bad-sp sc-bad-arg sc-boundary sc-boundary-2           \
 sc-boundary-3 halt exit create-normal create-empty create-null          \
 create-bad-ptr create-long create-exists create-bound open-normal       \
@@ -32,6 +32,7 @@ tests/userprog/stack-align-2_SRC = tests/userprog/stack-align.c
 tests/userprog/stack-align-3_SRC = tests/userprog/stack-align.c
 tests/userprog/stack-align-4_SRC = tests/userprog/stack-align.c
 tests/userprog/args-none_SRC = tests/userprog/args.c
+tests/userprog/args-zac_SRC = tests/userprog/args.c
 tests/userprog/args-single_SRC = tests/userprog/args.c
 tests/userprog/args-multiple_SRC = tests/userprog/args.c
 tests/userprog/args-many_SRC = tests/userprog/args.c
@@ -119,6 +120,7 @@ tests/userprog/child-rox_SRC = tests/userprog/child-rox.c
 
 $(foreach prog,$(tests/userprog_PROGS),$(eval $(prog)_SRC += tests/lib.c))
 
+tests/userprog/args-zac_ARGS = I am absolutely the most op person in the existance of all comprehension in its entirety.
 tests/userprog/stack-align-2_ARGS = a
 tests/userprog/stack-align-3_ARGS = ab
 tests/userprog/stack-align-4_ARGS = ab cd
