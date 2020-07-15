@@ -13,18 +13,5 @@ int
 main (void)
 {
   	pid_t grandchild_id = exec("child-simple"); //returns child simple's pid
-	// pid_t arr[]={grandchild_id};
-	// pid_t *sample;
-	// sample = &arr[0]; //can sample be a int array and not char sample[]?
-    //
-	// //Write the return value of exec in.
-  	// int handle, byte_cnt;
-    //
-	// // CHECK (create ("testgrandchild.txt", sizeof sample - 1), "create \"testgrandchild.txt\"");
-	// CHECK ((handle = open ("testgrandchild.txt")) > 1, "open \"testgrandchild.txt\"");
-    //
-	// byte_cnt = write (handle, sample, sizeof sample - 1);
-	// if (byte_cnt != sizeof sample - 1)
-	//   fail ("write() returned %d instead of %zu", byte_cnt, sizeof sample - 1);
     return grandchild_id;
 }
