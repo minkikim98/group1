@@ -92,13 +92,12 @@ struct thread
     uint8_t *stack;                     /* Saved stack pointer. */
     int priority;                       /* Priority. */
     struct list_elem allelem;           /* List element for all threads list. */
-    struct wait_status *o_wait_status;
+    struct wait_status *o_wait_status;  /* Wait syscall status. */
 
     /* Project 0 Task 3
     */
     struct file *file_descriptors[128];
     struct file *current_process;
-
 
     /* Shared between thread.c and synch.c. */
     struct list_elem elem;              /* List element. */
@@ -107,29 +106,25 @@ struct thread
     /* Owned by userprog/process.c. */
     uint32_t *pagedir;                  /* Page directory. */
 
-    /* Mabel */
-    struct list o_children_wait_status_list; //mabel, later initialized in thread.c
-#endif
+    /* Pintos list of this thread's children's wait statuses. */
+    struct list o_children_wait_status_list; 
 
+#endif
     /* Owned by thread.c. */
     unsigned magic;                     /* Detects stack overflow. */
-
   };
 
-/* Mabel's comments: Does it go in this file? I put it here just in case.
-Notes: Semaphore is in threads/synch.h, its init method is in threads/synch.c
-#IFDEF PINTOS_LIST already done for us I think. */
-struct wait_status { //mabel
-  tid_t o_tid; //mabel
-  struct semaphore o_sem_exited; //mabel
-  uint32_t o_exit_code; //it can also be an int //mabel
-  uint32_t o_reference_count; //mabel
-  struct lock o_reference_count_lock; //mabel
-  struct list_elem wselem; //it may have to be put in a list //mabel
-  uint8_t o_kernel_killed; //mabel
-}; //mabel
+struct wait_status {
+  tid_t o_tid;
+  struct semaphore o_sem_exited;
+  uint32_t o_exit_code;
+  uint32_t o_reference_count;
+  struct lock o_reference_count_lock;
+  struct list_elem wselem;
+  uint8_t o_kernel_killed;
+};
 
-/* THe good stuff. */
+// Helper function to modify reference count for our wait struct.
 void wait_status_mod_ref(struct wait_status* wait_status, int delta);
 
 

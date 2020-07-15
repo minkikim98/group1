@@ -57,11 +57,17 @@ syscall_handler (struct intr_frame *f UNUSED)
    */
 
   /* printf("System call number: %d\n", args[0]); */
-  //printf("syscall_handler called by %d\n", thread_current()->tid);
+
+  /*
+   * Helper functions for checking user-defined pointers. Variations for pointer
+   * type and whether we need to check a certain number of bytes following that 
+   * pointer. 
+   */
   inline bool is_bad_p_byte(void *user_p)
   {
     return !is_valid(user_p, thread_current());
   }
+
   bool is_bad_str_len(void *user_p, int* length)
   {
     *length = 0;
@@ -73,22 +79,27 @@ syscall_handler (struct intr_frame *f UNUSED)
     }
     return true;
   }
+
   bool is_bad_str(void *user_p)
   {
     int placeHolder = 0;
     return is_bad_str_len(user_p, &placeHolder);
   }
+
   bool is_bad_fp(void *user_p)
   {
     for (int i = 0; i < 4; i ++)
     {
       if (is_bad_p_byte(user_p + i))
-        //printf("Checked bad: %04p\n", user_p);
         return true;
     }
     return false;
   }
 
+  /*
+   * Helper functions for exiting. Variations for whether to exit with a
+   * certain code or with error, in which case we return with -1.
+   */
   void exit_with_code(int exit_code)
   {
     thread_current()->o_wait_status->o_exit_code = exit_code;
@@ -108,7 +119,9 @@ syscall_handler (struct intr_frame *f UNUSED)
     if (is_bad_str(str)) exit_error();
   }
 
+  // Check the syscall number.
   exit_if_bad_arg(0);
+
   if (args[0] == SYS_PRACTICE) {
     exit_if_bad_arg(1);
     f->eax = args[1] + 1;
@@ -121,31 +134,14 @@ syscall_handler (struct intr_frame *f UNUSED)
 
   if (args[0] == SYS_EXIT) {
     exit_if_bad_arg(1);
-    //printf("System exit number tid: %d\n", thread_current()->tid);
     f->eax = args[1];
     exit_with_code(args[1]);
   }
 
-  // cloudnube
-  /*if (args[0] == SYS_EXEC) {
-    // Verify that user-given pointer is valid; if not, return -1 and exit
-    exit_if_bad_arg(1);
-    exit_if_bad_str(args[1]);
-    char *file_name = (char *) args[1];
-    lock_acquire(&file_lock);
-    file_deny_write(file_name);
-    f->eax = process_execute(file_name);
-    file_allow_write(file_name);
-    lock_release(&file_lock);
-    return;
-  }*/
-
   if (args[0] == SYS_WAIT) {
-    //No need to check pointers because it's an int
     exit_if_bad_arg(1);
-    f->eax = process_wait(args[1]); //assuming args[1] is the child tid
+    f->eax = process_wait(args[1]);
   }
-
 
   void exit_release_if_bad_arg(int i)
   {
@@ -166,9 +162,7 @@ syscall_handler (struct intr_frame *f UNUSED)
   /**
   * Task 3: File operations.
   */
-  //printf("Gteting the cur thread\n");
   struct thread *cur = thread_current ();
-  //printf("Got the cur thread\n");
 
   if (args[0] == SYS_CREATE
     || args[0] == SYS_REMOVE

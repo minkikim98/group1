@@ -23,12 +23,14 @@
 static thread_func start_process NO_RETURN;
 static bool load (const char *cmdline, void (**eip) (void), void **esp);
 
+// Struct to pass filename and semaphore into new thread.
 typedef struct start_process_arg_set
 {
   void *file_name_;
   struct semaphore my_load_semaphore;
   bool succeed;
 } Arg_Set;
+
 /* Starts a new thread running a user program loaded from
    FILENAME.  The new thread may be scheduled (and may even exit)
    before process_execute() returns.  Returns the new process's
@@ -39,8 +41,10 @@ process_execute (const char *file_name)
   char *fn_copy;
   tid_t tid;
 
+  // Declare and initialize Arg_Set to pass into start_process.
   Arg_Set arg_set;
   sema_init (&arg_set.my_load_semaphore, 0);
+
   /* Make a copy of FILE_NAME.
      Otherwise there's a race between the caller and load(). */
   fn_copy = palloc_get_page (0);
@@ -54,9 +58,10 @@ process_execute (const char *file_name)
   if (tid == TID_ERROR)
     palloc_free_page (fn_copy);
 
+  // Ensures that we get back the result of the call to thread_create.
   sema_down(&arg_set.my_load_semaphore);
-  //printf("Load succeed? %d\n", my_load_succeed);
-  //struct thread my_current_thread = thread_current();
+
+  // If thread created successfully return tid, otherwise return -1.
   return arg_set.succeed ? tid : -1;
 }
 
@@ -65,9 +70,10 @@ process_execute (const char *file_name)
 static void
 start_process (void *arg_set_)
 {
+  // Extract file name from arg_set_.
   Arg_Set* arg_set = (Arg_Set *) arg_set_;
-  //printf("After setting succeed arg_set\n");
   char *file_name = arg_set->file_name_;
+
   struct intr_frame if_;
   bool success;
 
@@ -84,6 +90,8 @@ start_process (void *arg_set_)
   success = load (file_name, &if_.eip, &if_.esp);
   file_name[file_name_len] = last_char;
 
+  // Helper function for task 1.
+  // Author: Zackoric.
   void load_stack(void)
   {
     char* argPtr = file_name;
@@ -141,16 +149,18 @@ start_process (void *arg_set_)
   if (success)
     load_stack();
   palloc_free_page (file_name);
+
+  // Signals to parent thread if thread was created successfully.
   arg_set->succeed = success;
+
   if (!success)
   {
     sema_up(&arg_set->my_load_semaphore);
-    //printf("sema up s\n");
     thread_exit ();
     NOT_REACHED ();
   }
   sema_up(&arg_set->my_load_semaphore);
-    //printf("sema up f\n");
+
   /* Start the user process by simulating a return from an
      interrupt, implemented by intr_exit (in
      threads/intr-stubs.S).  Because intr_exit takes all of its
@@ -170,41 +180,39 @@ start_process (void *arg_set_)
 
    This function will be implemented in problem 2-2.  For now, it
    does nothing.
-   Mabel 7/11/20: I take this to mean that this will be called by the
-   process that .
-   Delete child_tid UNUSED keyword*/
+*/
 int
 process_wait (tid_t child_tid)
-{ //mabel (this whole function minus the skeleton)
-  //printf("In process_wait tid: %d\n", thread_current()->tid);
-  //printf("Process_wait called by %d\n", thread_current()->tid);
-  struct thread * t = thread_current(); //mabel (will this give you the current thread?)
+{ 
+  struct thread * t = thread_current(); 
   struct list_elem *e;
-  struct wait_status *my_wait_status = thread_get_wait_status(t, child_tid);
-  if (my_wait_status == NULL)
+  // Iterates through parent thread's list of child wait statuses to find wait status with matching tid.
+  struct wait_status *child_wait_status = thread_get_wait_status(t, child_tid);
+  // Invalid tid.
+  if (child_wait_status == NULL)
   {
-    //printf("process-wait: i return -1, current tid: %d\n", thread_current()->tid);
     return -1;
   }
-  //printf("sema_down caller: %d, tid: %d\n", thread_current()->tid, my_wait_status->o_tid);
-  sema_down(&my_wait_status->o_sem_exited);
-  //printf("sema_down over tid: %d\n", my_wait_status->o_tid);
-  int exit_code = my_wait_status->o_kernel_killed ? -1 : (int) my_wait_status->o_exit_code;
-  list_remove(&my_wait_status->wselem);
-  wait_status_mod_ref(my_wait_status, -1);
-  return exit_code; // good stuff
+  // Waits for child process to exit.
+  sema_down(&child_wait_status->o_sem_exited);
+  // If child was terminated by kernel, exit code is -1. 
+  // Otherwise, exit code is what child process returned.
+  int exit_code = child_wait_status->o_kernel_killed ? -1 : (int) child_wait_status->o_exit_code;
+  // Remove child wait status from parent's list of child wait statuses.
+  list_remove(&child_wait_status->wselem);
+  // Decrement reference count of chile wait status
+  wait_status_mod_ref(child_wait_status, -1);
+  return exit_code;
 }
 
 /* Free the current process's resources. */
 void
 process_exit (void)
 {
-  //printf("Process_exit called by %d\n", thread_current()->tid);
   struct thread *cur = thread_current ();
   uint32_t *pd;
 
-  /* Close current process and free file descriptors.
-  */
+  /* Close current process and free file descriptors. */
   file_close(cur->current_process);
   int i;
   for (i = 0; i < 128; i ++) {
@@ -230,9 +238,9 @@ process_exit (void)
       pagedir_activate (NULL);
       pagedir_destroy (pd);
     }
-  struct wait_status *my_wait_status = cur->o_wait_status;
-  sema_up (&my_wait_status->o_sem_exited);
-  //printf("sema_up caller: %d, ws tid: %d\n", thread_current()->tid, my_wait_status->o_tid);
+    // Signal to parent that child process finished.
+    struct wait_status *my_wait_status = cur->o_wait_status;
+    sema_up (&my_wait_status->o_sem_exited);
 }
 
 /* Sets up the CPU for running user code in the current
@@ -241,7 +249,6 @@ process_exit (void)
 void
 process_activate (void)
 {
-  //printf("process_activate\n");
   struct thread *t = thread_current ();
 
   /* Activate thread's page tables. */
@@ -436,7 +443,6 @@ load (const char *file_name, void (**eip) (void), void **esp)
 
  done:
   /* We arrive here whether the load is successful or not. */
- //printf("Returning from load: %d\n", success);
   return success;
 }
 

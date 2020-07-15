@@ -185,21 +185,17 @@ thread_create (const char *name, int priority,
   init_thread (t, name, priority);
   tid = t->tid = allocate_tid ();
 
-  //get current tcb thru current (parent)
-
-  //mabel: May have to put malloc elsewhere, but do you malloc here?
-  struct wait_status * my_wait_status = (struct wait_status *) malloc(sizeof(struct wait_status)); //mabel
-  //my_wait_status->o_tid = tid; //mabel (is this accessible here)
-  //my_wait_status->o_sem_exited = (struct semaphore *) malloc(sizeof(struct semaphore)); //mabel
-  sema_init(&my_wait_status->o_sem_exited, 0); //mabel, initialize semaphore to 0
+  // Declare and initialize a wait_status struct for this new thread.
+  struct wait_status * my_wait_status = (struct wait_status *) malloc(sizeof(struct wait_status)); 
+  sema_init(&my_wait_status->o_sem_exited, 0); 
   my_wait_status->o_tid = t->tid;
-  my_wait_status->o_exit_code = 0; //mabel
+  my_wait_status->o_exit_code = 0;
   my_wait_status->o_kernel_killed = false;
-  my_wait_status->o_reference_count = 0; //mabel, exec should set this
-  //my_wait_status->o_reference_count_lock = (struct lock *) malloc(sizeof(struct lock));
-  lock_init(&my_wait_status->o_reference_count_lock); //mabel
-  //not sure if we should start doing something with list elem
+  my_wait_status->o_reference_count = 0;
+  lock_init(&my_wait_status->o_reference_count_lock);
+  // Set this new thread's wait status to the wait_status we created.
   t->o_wait_status = my_wait_status;
+  // Increment the wait status' reference count.
   wait_status_mod_ref(my_wait_status, 1);
 
   /* Stack frame for kernel_thread(). */
@@ -217,13 +213,12 @@ thread_create (const char *name, int priority,
   sf->eip = switch_entry;
   sf->ebp = 0;
 
-  /* The good stuff */
-  {
-    //printf("Chidren tid: %04x\n", t->tid);
-    struct thread *parent_thread = thread_current();
-    list_push_front(&parent_thread->o_children_wait_status_list, &my_wait_status->wselem);
-    wait_status_mod_ref(my_wait_status, 1);
-  }
+  // Adds the wait status we created into the parent thread.
+  struct thread *parent_thread = thread_current();
+  list_push_front(&parent_thread->o_children_wait_status_list, &my_wait_status->wselem);
+  // Increment reference count to the new thread's wait status by 1. 
+  wait_status_mod_ref(my_wait_status, 1);
+  
 
   /* Add to run queue. */
   thread_unblock (t);
@@ -305,44 +300,27 @@ thread_tid (void)
 void
 thread_exit (void)
 {
-  //printf("thread_exit\n");
   ASSERT (!intr_context ());
-  //printf("Exiting thraed of tid: %d\n", thread_current()->tid);
 #ifdef USERPROG
   process_exit ();
 #endif
-  //printf("Exiting procedd of tid: %d\n", thread_current()->tid);
-
   /* Remove thread from all threads list, set our status to dying,
      and schedule another process.  That process will destroy us
      when it calls thread_schedule_tail(). */
-  //printf("thread_exit intr_disable\n");
   intr_disable ();
   list_remove (&thread_current()->allelem);
-  // void thread_action_func (struct thread *t, void *aux)
-  // {
-  //   wait_status_mod_ref(t->o_wait_status, -1);
-  // }
-  // thread_foreach(thread_action_func, NULL);
-  //printf("thread_exit list_elem\n");
-  struct list_elem *e;
   struct thread *curThread = thread_current();
 
-  // Zack: Decrement this process's chidren's wait_status ref
-  //printf("thread_exit begin dec procedd of tid: %d, len: %d\n", thread_current()->tid, list_size(&thread_current()->o_children_wait_status_list));
-  //printf("Thread_exit on tid: %d\n", thread_current()->tid);
+  // If this thread has any children,
   while (list_size(&thread_current()->o_children_wait_status_list) != 0)
   {
+    // Decrement the child's wait status struct reference count by 1.
     struct wait_status *ws = list_entry (list_pop_front(&thread_current()->o_children_wait_status_list), struct wait_status, wselem);
     wait_status_mod_ref(ws, -1);
   }
-  //printf("Thread_exit  after loop on tid: %d\n", thread_current()->tid);
-  //printf("thread_exit wait_status_mod_ref procedd of tid: %d\n", thread_current()->tid);
-  //printf("thread_exit wait_status_mod_ref\n");
 
-  // Zack: Decrement this process's wait_status ref
+  // Decrement this thread's wait status struct reference count by 1.
   wait_status_mod_ref(curThread->o_wait_status, -1);
-  //printf("Thread_exit  after wait_status_mod_ref on tid: %d, name: %s\n", thread_current()->tid, thread_current()->name);
 
   thread_current ()->status = THREAD_DYING;
   schedule ();
@@ -518,9 +496,8 @@ init_thread (struct thread *t, const char *name, int priority)
   t->priority = priority;
   t->magic = THREAD_MAGIC;
 
-  /* Mabel allocations below (not sure whether they should go): */
+  // Initialize this thread's Pintos list of child wait statuses.
   list_init(&(t->o_children_wait_status_list)); //mabel, Do list init
-  // t->o_wait_status = my_wait_status;
   /* End allocations */
 
   old_level = intr_disable ();
@@ -611,11 +588,9 @@ schedule (void)
   struct thread *next = next_thread_to_run ();
   struct thread *prev = NULL;
 
-  //printf("schedule before asserts tid: %d\n", thread_current()->tid);
   ASSERT (intr_get_level () == INTR_OFF);
   ASSERT (cur->status != THREAD_RUNNING);
   ASSERT (is_thread (next));
-  //printf("schedule after asserts tid: %d\n", thread_current()->tid);
   if (cur != next)
     prev = switch_threads (cur, next);
   thread_schedule_tail (prev);
@@ -653,12 +628,15 @@ void wait_status_mod_ref(struct wait_status* wait_status, int delta)
   }
 }
 
+// Helper function to return matching child tid's wait status struct
 struct wait_status *thread_get_wait_status(struct thread* t, tid_t tid)
 {
   struct wait_status *my_wait_status;
   struct list_elem *e;
+  // Iterate through thread's wait status list
   for (e = list_begin (&(t->o_children_wait_status_list)); e != list_end (&(t->o_children_wait_status_list)); e = list_next (e))
   {
+    // If tid's match, that child's wait status struct.
     my_wait_status = list_entry (e, struct wait_status, wselem);
     if (my_wait_status->o_tid == tid)
       return my_wait_status;
