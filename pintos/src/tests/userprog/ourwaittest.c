@@ -1,4 +1,7 @@
-/* Our wait test. Tests failure on a grandchild wait.  */
+/* INSTRUCTIONS:
+    Our wait test.
+    Tests failure of the wait syscall on an attempted
+    grandchild wait if the child that spawned the grandchild has died.  */
 
 #include <syscall.h>
 #include "tests/lib.h"
@@ -11,8 +14,8 @@
 void
 test_main (void)
 {
-  //I wonder if this will work. Call exec a program first and in that program
-  // it will call exec again and that program will return the grandchild pid
-  // which wiat should wait on and return -1.
+  /* 1. Call exec a program first and in that program
+     it will call exec again on child-simple and that program will return the grandchild pid
+     which wait should fail to wait on and return -1 */
     msg ("wait(exec()) = %d", wait(wait(exec ("child"))));
 }

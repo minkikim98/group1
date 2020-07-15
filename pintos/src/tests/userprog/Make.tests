@@ -152,14 +152,13 @@ tests/userprog/write-boundary_PUTFILES += tests/userprog/sample.txt
 tests/userprog/write-zero_PUTFILES += tests/userprog/sample.txt
 tests/userprog/multi-child-fd_PUTFILES += tests/userprog/sample.txt
 #added
-#tests/userprog/ourwaittest_PUTFILES += tests/userprog/testgrandchild.txt
 tests/userprog/task3-offset_PUTFILES += tests/userprog/alphabet.txt
 
 tests/userprog/exec-once_PUTFILES += tests/userprog/child-simple
 tests/userprog/exec-multiple_PUTFILES += tests/userprog/child-simple
 tests/userprog/wait-simple_PUTFILES += tests/userprog/child-simple
 tests/userprog/wait-twice_PUTFILES += tests/userprog/child-simple
-#added these 2 lines
+#added these 2 lines for wait test
 tests/userprog/ourwaittest_PUTFILES += tests/userprog/child
 tests/userprog/ourwaittest_PUTFILES += tests/userprog/child-simple
 
