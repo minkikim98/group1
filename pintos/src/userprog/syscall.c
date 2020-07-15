@@ -221,8 +221,99 @@ syscall_handler (struct intr_frame *f UNUSED)
 
       lock_acquire(&file_lock);
       struct thread *cur = thread_current ();
-      if (args[0] == SYS_FILESIZE) {
-        exit_release_if_bad_arg(1);
+
+      if (args[0] == SYS_EXEC) {
+        exit_if_bad_arg(1);
+        exit_if_bad_str(args[1]);
+        f->eax = process_execute((char *) args[1]);
+      } else if (args[0] == SYS_CREATE) {
+        if (!is_valid((void *) args + 1, cur) || !is_valid((void *) args + 2, cur)) {
+          lock_release(&file_lock);
+          exit_with_code(-1);
+        }
+        if (!is_valid((void *) args[1], cur) || args[1] == 0) {
+          lock_release(&file_lock);
+          exit_with_code(-1);
+        }
+        int n = 0;
+        int m = 50;
+        char *tmp = (char *) args[1];
+        while (*(tmp + n) != '\0' && n < m) {
+          if (!is_valid((void *) args[1] + n, cur)) {
+            f->eax = false;
+            goto release;
+          }
+          n ++;
+        }
+        char file_name[n];
+        memcpy((char *) file_name, (char *) args[1], n + 1);
+        f->eax = filesys_create((char *) file_name, args[2]);
+      } else if (args[0] == SYS_REMOVE) {
+        if (!is_valid((void *) args + 1, cur)) {
+          lock_release(&file_lock);
+          exit_with_code(-1);
+        }
+        if (!is_valid((void *) args[1], cur) || args[1] == 0) {
+          lock_release(&file_lock);
+          exit_with_code(-1);
+        }
+        int n = 0;
+        int m = 50;
+        char *tmp = (char *) args[1];
+        while (*(tmp + n) != '\0' && n < m) {
+          if (!is_valid((void *) args[1] + n, cur)) {
+            f->eax = false;
+            goto release;
+          }
+          n ++;
+        }
+        char file_name[n];
+        memcpy((char *) file_name, (char *) args[1], n + 1);
+        f->eax = filesys_remove((char *) args[1]);
+      } else if (args[0] == SYS_OPEN) {
+        if (!is_valid((void *) args + 1, cur)) {
+          lock_release(&file_lock);
+          exit_with_code(-1);
+        }
+        if (!is_valid((void *) args[1], cur) || args[1] == 0) {
+          lock_release(&file_lock);
+          exit_with_code(-1);
+        }
+        int n = 0;
+        int m = 50;
+        char *tmp = (char *) args[1];
+        while (*(tmp + n) != '\0' && n < m) {
+          if (!is_valid((void *) args[1] + n, cur)) {
+            f->eax = false;
+            goto release;
+          }
+          n ++;
+        }
+        char file_name[n];
+        memcpy((char *) file_name, (char *) args[1], n + 1);
+        struct file* fp = filesys_open(file_name);
+        if (fp == NULL) {
+          f->eax = -1;
+          goto release;
+        }
+        int fd = 2;
+        while (fd < 128) {
+          if (cur->file_descriptors[fd] == NULL) {
+            cur->file_descriptors[fd] = fp;
+            break;
+          }
+          fd ++;
+        }
+        if (fd == 128) {
+          f->eax = -1;
+          goto release;
+        }
+        f->eax = fd;
+      } else if (args[0] == SYS_FILESIZE) {
+        if (!is_valid((void *) args + 1, cur)) {
+          lock_release(&file_lock);
+          exit_with_code(-1);
+        }
         int fd = args[1];
         if (fd < 2 ||fd > 127) {
           f->eax = 0;
