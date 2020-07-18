@@ -82,6 +82,7 @@ typedef int tid_t;
    only because they are mutually exclusive: only a thread in the
    ready state is on the run queue, whereas only a thread in the
    blocked state is on a semaphore wait list. */
+
 struct thread
   {
     /* Owned by thread.c. */
@@ -91,6 +92,12 @@ struct thread
     uint8_t *stack;                     /* Saved stack pointer. */
     int priority;                       /* Priority. */
     struct list_elem allelem;           /* List element for all threads list. */
+    struct wait_status *o_wait_status;  /* Wait syscall status. */
+
+    /* Project 0 Task 3
+    */
+    struct file *file_descriptors[128];
+    struct file *current_process;
 
     /* Shared between thread.c and synch.c. */
     struct list_elem elem;              /* List element. */
@@ -98,11 +105,30 @@ struct thread
 #ifdef USERPROG
     /* Owned by userprog/process.c. */
     uint32_t *pagedir;                  /* Page directory. */
-#endif
 
+    /* Pintos list of this thread's children's wait statuses. */
+    struct list o_children_wait_status_list; 
+
+#endif
     /* Owned by thread.c. */
     unsigned magic;                     /* Detects stack overflow. */
   };
+
+struct wait_status {
+  tid_t o_tid;
+  struct semaphore o_sem_exited;
+  uint32_t o_exit_code;
+  uint32_t o_reference_count;
+  struct lock o_reference_count_lock;
+  struct list_elem wselem;
+  uint8_t o_kernel_killed;
+};
+
+// Helper function to modify reference count for our wait struct.
+void wait_status_mod_ref(struct wait_status* wait_status, int delta);
+
+struct wait_status *thread_get_wait_status(struct thread* t, tid_t tid);
+
 
 /* If false (default), use round-robin scheduler.
    If true, use multi-level feedback queue scheduler.
