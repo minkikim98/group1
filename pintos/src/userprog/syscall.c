@@ -44,6 +44,45 @@ is_valid(const void *vaddr, struct thread *t) {
   return true;
 }
 
+/**
+* Checks STRING has valid address for each element until the null terminator.
+* Returns the size of the string, or -1 if invalid.
+*/
+static int
+is_valid_string(char *string, struct thread *t) {
+  int n = 0;
+  while (*(string + n) != '\0') {
+    if (!is_valid((void *) string + n, t)) {
+      return -1;
+    }
+    n ++;
+  }
+  return n;
+}
+
+/**
+* Checks buffer has valid address for each element.
+* Returns true if valid, false if invalid.
+*/
+static bool
+is_valid_buffer(char *buffer, int size, struct thread *t) {
+  int n = 0;
+  for (; n < size; n ++) {
+    if (!is_valid((void *) buffer + n, t)) {
+      return false;
+    }
+  }
+  return true;
+}
+
+/**
+* Checks if a file descriptor (not 0 or 1) is valid.
+*/
+static bool
+is_valid_fd(int fd, struct thread *t) {
+  return !(fd < 2 || fd > 127 || t->file_descriptors[fd] == NULL);
+}
+
 static void
 syscall_handler (struct intr_frame *f UNUSED)
 {
@@ -59,33 +98,23 @@ syscall_handler (struct intr_frame *f UNUSED)
   /* printf("System call number: %d\n", args[0]); */
 
   /*
-   * Helper functions for checking user-defined pointers. Variations for pointer
-   * type and whether we need to check a certain number of bytes following that 
-   * pointer. 
+   * Helper functions to check if user-provided pointer is valid. Functions vary 
+   * to account for the type of user pointer provided. 
    */
+
   inline bool is_bad_p_byte(void *user_p)
   {
     return !is_valid(user_p, thread_current());
   }
-
-  bool is_bad_str_len(void *user_p, int* length)
+  bool is_bad_str(void *user_p)
   {
-    *length = 0;
     while (!is_bad_p_byte(user_p))
     {
-      (*length) ++;
       if (*((char *) user_p) == '\0') return false;
       user_p++;
     }
     return true;
   }
-
-  bool is_bad_str(void *user_p)
-  {
-    int placeHolder = 0;
-    return is_bad_str_len(user_p, &placeHolder);
-  }
-
   bool is_bad_fp(void *user_p)
   {
     for (int i = 0; i < 4; i ++)
@@ -97,9 +126,9 @@ syscall_handler (struct intr_frame *f UNUSED)
   }
 
   /*
-   * Helper functions for exiting. Variations for whether to exit with a
-   * certain code or with error, in which case we return with -1.
-   */
+   * Helper functions to exit thread and print an error code message with exit code. 
+   * Some functions can also check conditions, then exit.
+   */ 
   void exit_with_code(int exit_code)
   {
     thread_current()->o_wait_status->o_exit_code = exit_code;
@@ -119,9 +148,7 @@ syscall_handler (struct intr_frame *f UNUSED)
     if (is_bad_str(str)) exit_error();
   }
 
-  // Check the syscall number.
   exit_if_bad_arg(0);
-
   if (args[0] == SYS_PRACTICE) {
     exit_if_bad_arg(1);
     f->eax = args[1] + 1;
@@ -139,73 +166,20 @@ syscall_handler (struct intr_frame *f UNUSED)
   }
 
   if (args[0] == SYS_WAIT) {
+    //No need to check pointers because it's an int
     exit_if_bad_arg(1);
-    f->eax = process_wait(args[1]);
+    f->eax = process_wait(args[1]); 
   }
 
-  void exit_release_if_bad_arg(int i)
-  {
-    if (is_bad_fp(&args[i]))
-    {
-      lock_release(&file_lock);
-      exit_error();
-    }
-  }
-  void exit_release_if_bad_str(char* ptr, int* len)
-  {
-    if (is_bad_str_len(ptr, len))
-    {
-      lock_release(&file_lock);
-      exit_error();
-    }
-  }
+
   /**
   * Task 3: File operations.
+  * Below is a critical section that uses the global lock FILE_LOCK.
   */
-  struct thread *cur = thread_current ();
-
   if (args[0] == SYS_CREATE
     || args[0] == SYS_REMOVE
-    || args[0] == SYS_OPEN)
-  {
-    lock_acquire(&file_lock);
-    exit_release_if_bad_arg(1);
-    int len;
-    exit_release_if_bad_str((char *) args[1], &len);
-    char file_name[len];
-    memcpy((char *) file_name, (char *) args[1], len);
-    if (args[0] == SYS_CREATE)
-    {
-      exit_release_if_bad_arg(2);
-      f->eax = filesys_create((char *) file_name, args[2]);
-    }
-    else if (args[0] == SYS_REMOVE)
-    {
-      f->eax = filesys_remove((char *) args[1]);
-    }
-    else if (args[0] == SYS_OPEN)
-    {
-      struct file* fp = filesys_open(file_name);
-      if (fp == NULL) {
-        f->eax = -1;
-        goto release;
-      }
-      int fd = 2;
-      while (fd < 128) {
-        if (cur->file_descriptors[fd] == NULL) {
-          cur->file_descriptors[fd] = fp;
-          break;
-        }
-        fd ++;
-      }
-      if (fd == 128) {
-        f->eax = -1;
-        goto release;
-      }
-      f->eax = fd;
-    }
-  }
-  else if(args[0] == SYS_FILESIZE
+    || args[0] == SYS_OPEN
+    || args[0] == SYS_FILESIZE
     || args[0] == SYS_READ
     || args[0] == SYS_WRITE
     || args[0] == SYS_SEEK
@@ -213,84 +187,86 @@ syscall_handler (struct intr_frame *f UNUSED)
     || args[0] == SYS_CLOSE
     || args[0] == SYS_EXEC) {
 
+      /* Acquire the lock and obtain the current thread. */
       lock_acquire(&file_lock);
       struct thread *cur = thread_current ();
 
       if (args[0] == SYS_EXEC) {
+        /* Protect file operations in exec by including it in the critical section. */
         exit_if_bad_arg(1);
         exit_if_bad_str(args[1]);
         f->eax = process_execute((char *) args[1]);
       } else if (args[0] == SYS_CREATE) {
+        /* Check if &args[1], &args[2] are valid. */
         if (!is_valid((void *) args + 1, cur) || !is_valid((void *) args + 2, cur)) {
           lock_release(&file_lock);
           exit_with_code(-1);
         }
+        /* Check if args[1] is valid and is not a null pointer. */
         if (!is_valid((void *) args[1], cur) || args[1] == 0) {
           lock_release(&file_lock);
           exit_with_code(-1);
         }
-        int n = 0;
-        int m = 50;
-        char *tmp = (char *) args[1];
-        while (*(tmp + n) != '\0' && n < m) {
-          if (!is_valid((void *) args[1] + n, cur)) {
+        /* Check every character in args[1] has a valid address until the null terminator. */
+        int n = is_valid_string((char *) args[1], cur);
+        if (n < 0) {
             f->eax = false;
             goto release;
-          }
-          n ++;
         }
+        /* Copy over args[1]. */
         char file_name[n];
         memcpy((char *) file_name, (char *) args[1], n + 1);
+        /* Call the appropriate filesys function and store the return value. */
         f->eax = filesys_create((char *) file_name, args[2]);
       } else if (args[0] == SYS_REMOVE) {
+        /* Check if &args[1] is valid.*/
         if (!is_valid((void *) args + 1, cur)) {
           lock_release(&file_lock);
           exit_with_code(-1);
         }
+        /* Check if args[1] is valid and is not a null pointer. */
         if (!is_valid((void *) args[1], cur) || args[1] == 0) {
           lock_release(&file_lock);
           exit_with_code(-1);
         }
-        int n = 0;
-        int m = 50;
-        char *tmp = (char *) args[1];
-        while (*(tmp + n) != '\0' && n < m) {
-          if (!is_valid((void *) args[1] + n, cur)) {
+        /* Check every character in args[1] has a valid address until the null terminator. */
+        int n = is_valid_string((char *) args[1], cur);
+        if (n < 0) {
             f->eax = false;
             goto release;
-          }
-          n ++;
         }
+        /* Copy over args[1]. */
         char file_name[n];
         memcpy((char *) file_name, (char *) args[1], n + 1);
         f->eax = filesys_remove((char *) args[1]);
       } else if (args[0] == SYS_OPEN) {
+        /* Check if &args[1] is valid.*/
         if (!is_valid((void *) args + 1, cur)) {
           lock_release(&file_lock);
           exit_with_code(-1);
         }
+        /* Check if args[1] is valid and is not a null pointer. */
         if (!is_valid((void *) args[1], cur) || args[1] == 0) {
           lock_release(&file_lock);
           exit_with_code(-1);
         }
-        int n = 0;
-        int m = 50;
-        char *tmp = (char *) args[1];
-        while (*(tmp + n) != '\0' && n < m) {
-          if (!is_valid((void *) args[1] + n, cur)) {
+        /* Check every character in args[1] has a valid address until the null terminator. */
+        int n = is_valid_string((char *) args[1], cur);
+        if (n < 0) {
             f->eax = false;
             goto release;
-          }
-          n ++;
         }
+        /* Copy over args[1]. */
         char file_name[n];
         memcpy((char *) file_name, (char *) args[1], n + 1);
+        /* Call the appropriate filesys function. */
         struct file* fp = filesys_open(file_name);
+        /* Assign a file descriptor. */
         if (fp == NULL) {
           f->eax = -1;
           goto release;
         }
-        int fd = 2;
+        int fd = 2; // Reserve 0 and 1 for standard input and output.
         while (fd < 128) {
           if (cur->file_descriptors[fd] == NULL) {
             cur->file_descriptors[fd] = fp;
@@ -298,78 +274,84 @@ syscall_handler (struct intr_frame *f UNUSED)
           }
           fd ++;
         }
-        if (fd == 128) {
+        if (fd == 128) { // All file descriptors for this thread are occupied.
           f->eax = -1;
           goto release;
         }
         f->eax = fd;
       } else if (args[0] == SYS_FILESIZE) {
+        /* Check if &args[1] is valid.*/
         if (!is_valid((void *) args + 1, cur)) {
           lock_release(&file_lock);
           exit_with_code(-1);
         }
+        /* Check if the file descriptor is valid. */
         int fd = args[1];
-        if (fd < 2 ||fd > 127) {
+        if (!is_valid_fd(fd, cur)) {
           f->eax = 0;
           goto release;
         }
-        f->eax = file_length(cur->file_descriptors[args[1]]);
+        /* Call the appropriate filesys function. */
+        f->eax = file_length(cur->file_descriptors[fd]);
       } else if (args[0] == SYS_READ) {
-        exit_release_if_bad_arg(1);
-        exit_release_if_bad_arg(2);
-        exit_release_if_bad_arg(3);
+        /* Check if &args[1], &args[2], &args[3] are valid.*/
+        if (!is_valid((void *) args + 1, cur) || !is_valid((void *) args + 2, cur) || !is_valid((void *) args + 3, cur)) {
+          lock_release(&file_lock);
+          exit_with_code(-1);
+        }
+        /* Check if args[2] is valid and is not a null pointer. */
         if (!is_valid((void *) args[2], cur) || args[2] == 0) {
           lock_release(&file_lock);
           exit_with_code(-1);
         }
-        int n = 0;
-        int size = (int) args[3];
-        char *tmp = (char *) args[2];
-        for (; n < size; n ++) {
-          if (!is_valid((void *) args[2] + n, cur)) {
-            f->eax = -1;
-            goto release;
-          }
+        /* Check if the buffer is valid. */
+        bool valid_buffer = is_valid_buffer((char *) args[2], (int) args[3], cur);
+        if (!valid_buffer) {
+          f->eax = -1;
+          goto release;
         }
-        char *buffer = (char *) args[2];
+
         int fd = args[1];
-        /** Read from standard input. */
+        char *buffer = (char *) args[2];
+        int size = args[3];
+        /* Read from standard input if fd == 0. */
         if (fd == 0) {
           int i;
           for (i = 0; i < size; i ++) {
             buffer[i] = input_getc();
           }
           f->eax = size;
-          for (i = 0; i < size; i ++) {
-            *(tmp + i) = buffer[i];
-          }
           goto release;
         }
-        /** Read from a file descriptor. */
-        if (fd < 2 ||fd > 127 || cur->file_descriptors[args[1]] == NULL) {
+        /* Read from a file descriptor. Check if fd is valid. */
+        if (!is_valid_fd(fd, cur)) {
           f->eax = -1;
           goto release;
         }
-        f->eax = file_read(cur->file_descriptors[args[1]], buffer, args[3]);
+        /* Call the appropriate filesys function. */
+        f->eax = file_read(cur->file_descriptors[fd], buffer, size);
       } else if (args[0] == SYS_WRITE) {
-        exit_release_if_bad_arg(1);
-        exit_release_if_bad_arg(2);
-        exit_release_if_bad_arg(3);
+        /* Check if &args[1], &args[2], &args[3] are valid.*/
+        if (!is_valid((void *) args + 1, cur) || !is_valid((void *) args + 2, cur) || !is_valid((void *) args + 3, cur)) {
+          lock_release(&file_lock);
+          exit_with_code(-1);
+        }
+        /* Check if args[2] is valid and is not a null pointer. */
         if (!is_valid((void *) args[2], cur) || args[2] == 0) {
           lock_release(&file_lock);
           exit_with_code(-1);
         }
-        int n = 0;
-        int size = (int) args[3];
-        for (; n < size ; n ++) {
-          if (!is_valid((void *) args[2] + n, cur)) {
-            f->eax = -1;
-            goto release;
-          }
+        /* Check if the buffer is valid. */
+        bool valid_buffer = is_valid_buffer((char *) args[2], (int) args[3], cur);
+        if (!valid_buffer) {
+          f->eax = -1;
+          goto release;
         }
-        char *buffer = (char *) args[2];
+
         int fd = args[1];
-        /* Write to standard output. */
+        char *buffer = (char *) args[2];
+        int size = args[3];
+        /* Write to standard output if fd == 1. */
         if (fd == 1) {
           int num_buf;
           if (size % 100 == 0) {
@@ -377,7 +359,7 @@ syscall_handler (struct intr_frame *f UNUSED)
           } else {
             num_buf = size / 100 + 1;
           }
-          char smaller_buf[100];
+          char smaller_buf[100]; // Write to standard output 100 bytes at a time.
           int i = 0;
           for (; i < num_buf; i ++) {
             if (i == num_buf - 1) {
@@ -390,39 +372,61 @@ syscall_handler (struct intr_frame *f UNUSED)
           }
           goto release;
         }
-        /* Write to a file. */
-        if (fd < 2 ||fd > 127 || cur->file_descriptors[args[1]] == NULL) {
+        /* Write to a file. Check if fd is valid. */
+        if (!is_valid_fd(fd, cur)) {
           f->eax = -1;
           goto release;
         }
-        f->eax = file_write(cur->file_descriptors[args[1]], buffer, size);
+        /* Call the appropriate filesys function. */
+        f->eax = file_write(cur->file_descriptors[fd], buffer, size);
       } else if (args[0] == SYS_SEEK) {
-        exit_release_if_bad_arg(1);
-        exit_release_if_bad_arg(2);
-        if (args[1] < 2 || args[1] > 127 || cur->file_descriptors[args[1]] == NULL) {
+        /* Check if &args[1], &args[2] are valid.*/
+        if (!is_valid((void *) args + 1, cur) || !is_valid((void *) args + 2, cur)) {
+          lock_release(&file_lock);
+          exit_with_code(-1);
+        }
+        /* Check if fd is valid. */
+        int fd = args[1];
+        if (!is_valid_fd(fd, cur)) {
           goto release;
         }
-        file_seek(cur->file_descriptors[args[1]], args[2]);
+        /* Call the appropriate filesys function. */
+        file_seek(cur->file_descriptors[fd], args[2]);
       } else if (args[0] == SYS_TELL) {
-        exit_release_if_bad_arg(1);
-        if (args[1] < 2 || args[1] > 127 || cur->file_descriptors[args[1]] == NULL) {
+        /* Check if &args[1] is valid.*/
+        if (!is_valid((void *) args + 1, cur)) {
+          lock_release(&file_lock);
+          exit_with_code(-1);
+        }
+        /* Check if fd is valid. */
+        int fd = args[1];
+        if (!is_valid_fd(fd, cur)) {
           f->eax = 0;
           goto release;
         }
-        f->eax = file_tell(cur->file_descriptors[args[1]]);
+        /* Call the appropriate filesys function. */
+        f->eax = file_tell(cur->file_descriptors[fd]);
       } else if (args[0] == SYS_CLOSE) {
-        exit_release_if_bad_arg(1);
-        if (args[1] < 2 || args[1] > 127 || cur->file_descriptors[args[1]] == NULL) {
+        /* Check if &args[1] is valid.*/
+        if (!is_valid((void *) args + 1, cur)) {
+          lock_release(&file_lock);
+          exit_with_code(-1);
+        }
+        /* Check if fd is valid. */
+        int fd = args[1];
+        if (!is_valid_fd(fd, cur)) {
           goto release;
         }
-        file_close(cur->file_descriptors[args[1]]);
-        cur->file_descriptors[args[1]] = NULL;
+        /* Call the appropriate filesys function. */
+        file_close(cur->file_descriptors[fd]);
+        /* Free the fd for future use. */
+        cur->file_descriptors[fd] = NULL;
       }
 
 
-    }
-    release:
-      if (lock_held_by_current_thread (&file_lock))
+      /* Release the lock and exit the critical section. */
+      release:
         lock_release(&file_lock);
+    }
 
 }
