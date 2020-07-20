@@ -509,9 +509,9 @@ next_thread_to_run (void)
         intr_set_level (old_level);
         return t;
       }
-      intr_set_level (old_level);
-      return idle_thread;
     }//list_entry (list_pop_front (&ready_list), struct thread, elem);
+    intr_set_level (old_level);
+    return idle_thread;
   }
 }
 
