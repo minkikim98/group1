@@ -491,25 +491,30 @@ alloc_frame (struct thread *t, size_t size)
 static struct thread *
 next_thread_to_run (void)
 {
+  enum intr_level old_level;
   if (list_empty (&ready_list))
     return idle_thread;
   else
   {
+    old_level = intr_disable ();
     struct list_elem *e;
     
     for (e = list_begin (&ready_list); e != list_end (&ready_list);
        e = list_next (e))
     {
       struct thread *t = list_entry (e, struct thread, elem);
-        list_remove (e);
+      list_remove (e);
+      intr_set_level (old_level);
       return t;
       if (t->o_ready_tick < timer_ticks ())
       {
         list_remove (e);
+        intr_set_level (old_level);
         return t;
       }
-    }
-    return idle_thread;//list_entry (list_pop_front (&ready_list), struct thread, elem);
+      intr_set_level (old_level);
+      return idle_thread;
+    }//list_entry (list_pop_front (&ready_list), struct thread, elem);
   }
 }
 
