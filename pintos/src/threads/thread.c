@@ -496,14 +496,14 @@ next_thread_to_run (void)
     return idle_thread;
   else
   {
-    old_level = intr_disable ();
+    //old_level = intr_disable ();
     struct list_elem *e;
     
     for (e = list_end (&ready_list); e != list_begin (&ready_list);
        e = list_prev (e))
     {
       struct thread *t = list_entry (e, struct thread, elem);
-      intr_set_level (old_level);
+      //intr_set_level (old_level);
       return t;
       if (t->o_ready_tick < timer_ticks ())
       {
@@ -512,7 +512,7 @@ next_thread_to_run (void)
         return t;
       }
     }//list_entry (list_pop_front (&ready_list), struct thread, elem);
-    intr_set_level (old_level);
+    //intr_set_level (old_level);
     return idle_thread;
   }
 }
