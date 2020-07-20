@@ -103,9 +103,8 @@ thread_init (void)
   init_thread (initial_thread, "main", PRI_DEFAULT);
   initial_thread->status = THREAD_RUNNING;
   initial_thread->tid = allocate_tid ();
-  initial_thread->o_ready_tick = 0;
-  initial_thread->priority = 0;
-  initial_thread->o_donated_priority = -1;
+  //initial_thread->priority = PRI_DEFAULT;
+  //initial_thread->o_donated_priority = -1;
 }
 
 /* Starts preemptive thread scheduling by enabling interrupts.
@@ -472,7 +471,9 @@ init_thread (struct thread *t, const char *name, int priority)
   strlcpy (t->name, name, sizeof t->name);
   t->stack = (uint8_t *) t + PGSIZE;
   t->priority = priority;
+  t->o_donated_priority = PRI_MIN;
   t->magic = THREAD_MAGIC;
+  t->o_ready_tick = 0;
 
   old_level = intr_disable ();
   list_push_back (&all_list, &t->allelem);
