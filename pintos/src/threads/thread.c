@@ -501,7 +501,7 @@ next_thread_to_run (void)
        e = list_next (e))
     {
       struct thread *t = list_entry (e, struct thread, elem);
-      if (t->o_ready_tick > timer_ticks ())
+      if (t->o_ready_tick < timer_ticks ())
       {
         list_remove (e);
         return t;
