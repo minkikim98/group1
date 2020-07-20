@@ -504,9 +504,9 @@ next_thread_to_run (void)
     {
       struct thread *t = list_entry (e, struct thread, elem);
       //intr_set_level (old_level);
-      list_remove (e);
-      return t;
-      if (t->o_ready_tick < timer_ticks ())
+      // list_remove (e);
+      // return t;
+      if (t->o_ready_tick <= timer_ticks ())
       {
         list_remove (e);
         return t;
