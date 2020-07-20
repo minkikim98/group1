@@ -96,6 +96,9 @@ struct thread
     struct list_elem elem;              /* List element. */
     
     int64_t o_ready_tick;
+
+    int o_donated_priority;
+
 #ifdef USERPROG
     /* Owned by userprog/process.c. */
     uint32_t *pagedir;                  /* Page directory. */
