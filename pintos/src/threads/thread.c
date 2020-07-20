@@ -105,7 +105,7 @@ thread_init (void)
   initial_thread->tid = allocate_tid ();
   initial_thread->o_ready_tick = 0;
   initial_thread->priority = 0;
-  initial_thread->o_donated_priority = 0;
+  initial_thread->o_donated_priority = -1;
 }
 
 /* Starts preemptive thread scheduling by enabling interrupts.
@@ -660,8 +660,8 @@ static void thread_update_priority (struct thread *t, int p)
 
 static bool ready_list_less (const struct list_elem *a, const struct list_elem *b, void *aux)
 {
-  return get_effective_priority (list_entry (a, struct thread, elem)) -
-    get_effective_priority (list_entry (b, struct thread, elem));
+  return get_effective_priority (list_entry (b, struct thread, elem)) -
+    get_effective_priority (list_entry (a, struct thread, elem));
 }
 
 static void thread_update_ready_list (struct thread *t)
