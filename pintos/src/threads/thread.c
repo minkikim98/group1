@@ -501,14 +501,15 @@ next_thread_to_run (void)
        e = list_next (e))
     {
       struct thread *t = list_entry (e, struct thread, elem);
+      return t;
       if (t->o_ready_tick < timer_ticks ())
       {
         list_remove (e);
         return t;
       }
     }
+    return idle_thread;//list_entry (list_pop_front (&ready_list), struct thread, elem);
   }
-  return idle_thread;//list_entry (list_pop_front (&ready_list), struct thread, elem);
 }
 
 /* Completes a thread switch by activating the new thread's page
