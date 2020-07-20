@@ -643,6 +643,7 @@ static void thread_update_priority (struct thread *t, int p)
   {
     if (p < get_ready_priority ())
     {
+      thread_update_ready_list(t);
       thread_yield ();
       return;
     }
