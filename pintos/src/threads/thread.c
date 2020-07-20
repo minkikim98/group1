@@ -499,10 +499,12 @@ next_thread_to_run (void)
     old_level = intr_disable ();
     struct list_elem *e;
     
-    for (e = list_begin (&ready_list); e != list_end (&ready_list);
-       e = list_next (e))
+    for (e = list_end (&ready_list); e != list_begin (&ready_list);
+       e = list_prev (e))
     {
       struct thread *t = list_entry (e, struct thread, elem);
+      intr_set_level (old_level);
+      return t;
       if (t->o_ready_tick < timer_ticks ())
       {
         list_remove (e);
