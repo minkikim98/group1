@@ -499,16 +499,16 @@ next_thread_to_run (void)
     //old_level = intr_disable ();
     struct list_elem *e;
     
-    for (e = list_end (&ready_list); e != list_begin (&ready_list);
-       e = list_prev (e))
+    for (e = list_begin (&ready_list); e != list_end (&ready_list);
+       e = list_next (e))
     {
       struct thread *t = list_entry (e, struct thread, elem);
       //intr_set_level (old_level);
+      list_remove (e);
       return t;
       if (t->o_ready_tick < timer_ticks ())
       {
         list_remove (e);
-        intr_set_level (old_level);
         return t;
       }
     }//list_entry (list_pop_front (&ready_list), struct thread, elem);
@@ -576,7 +576,7 @@ schedule (void)
   struct thread *cur = running_thread ();
   struct thread *next = next_thread_to_run ();
   struct thread *prev = NULL;
-
+  
   ASSERT (intr_get_level () == INTR_OFF);
   ASSERT (cur->status != THREAD_RUNNING);
   ASSERT (is_thread (next));
