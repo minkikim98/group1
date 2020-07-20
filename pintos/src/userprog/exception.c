@@ -81,21 +81,14 @@ kill (struct intr_frame *f)
 
   /* The interrupt frame's code segment value tells us where the
      exception originated. */
-  struct thread * curThread = thread_current();
   switch (f->cs)
     {
     case SEL_UCSEG:
       /* User's code segment, so it's a user exception, as we
          expected.  Kill the user process.  */
-
-      // Signals to parent that this thread was killed by kernel.
-      curThread->o_wait_status->o_kernel_killed = 1;
-
       printf ("%s: dying due to interrupt %#04x (%s).\n",
               thread_name (), f->vec_no, intr_name (f->vec_no));
       intr_dump_frame (f);
-
-      printf ("%s: exit(%d)\n", &thread_current ()->name, -1);
       thread_exit ();
 
     case SEL_KCSEG:
@@ -165,3 +158,4 @@ page_fault (struct intr_frame *f)
           user ? "user" : "kernel");
   kill (f);
 }
+

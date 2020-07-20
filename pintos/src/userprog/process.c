@@ -19,61 +19,41 @@
 #include "threads/thread.h"
 #include "threads/vaddr.h"
 
-//static bool my_load_succeed;
+static struct semaphore temporary;
 static thread_func start_process NO_RETURN;
 static bool load (const char *cmdline, void (**eip) (void), void **esp);
-
-// Struct to pass filename and semaphore into new thread.
-typedef struct start_process_arg_set
-{
-  void *file_name_;
-  struct semaphore my_load_semaphore;
-  bool succeed;
-} Arg_Set;
 
 /* Starts a new thread running a user program loaded from
    FILENAME.  The new thread may be scheduled (and may even exit)
    before process_execute() returns.  Returns the new process's
-   thread id, or TID_ERROR if the thread cannot be created. ;)*/
+   thread id, or TID_ERROR if the thread cannot be created. */
 tid_t
 process_execute (const char *file_name)
 {
   char *fn_copy;
   tid_t tid;
 
-  // Declare and initialize Arg_Set to pass into start_process.
-  Arg_Set arg_set;
-  sema_init (&arg_set.my_load_semaphore, 0);
-
+  sema_init (&temporary, 0);
   /* Make a copy of FILE_NAME.
      Otherwise there's a race between the caller and load(). */
   fn_copy = palloc_get_page (0);
   if (fn_copy == NULL)
     return TID_ERROR;
   strlcpy (fn_copy, file_name, PGSIZE);
-  arg_set.file_name_ = fn_copy;
 
   /* Create a new thread to execute FILE_NAME. */
-  tid = thread_create (file_name, PRI_DEFAULT, start_process, &arg_set);
+  tid = thread_create (file_name, PRI_DEFAULT, start_process, fn_copy);
   if (tid == TID_ERROR)
     palloc_free_page (fn_copy);
-
-  // Ensures that we get back the result of the call to thread_create.
-  sema_down(&arg_set.my_load_semaphore);
-
-  // If thread created successfully return tid, otherwise return -1.
-  return arg_set.succeed ? tid : -1;
+  return tid;
 }
 
 /* A thread function that loads a user process and starts it
    running. */
 static void
-start_process (void *arg_set_)
+start_process (void *file_name_)
 {
-  // Extract file name from arg_set_.
-  Arg_Set* arg_set = (Arg_Set *) arg_set_;
-  char *file_name = arg_set->file_name_;
-
+  char *file_name = file_name_;
   struct intr_frame if_;
   bool success;
 
@@ -82,84 +62,12 @@ start_process (void *arg_set_)
   if_.gs = if_.fs = if_.es = if_.ds = if_.ss = SEL_UDSEG;
   if_.cs = SEL_UCSEG;
   if_.eflags = FLAG_IF | FLAG_MBS;
-  int file_name_len = 0;
-  while (file_name[file_name_len] && file_name[file_name_len] != ' ')
-    file_name_len ++;
-  char last_char = file_name[file_name_len];
-  file_name[file_name_len] = '\0';
   success = load (file_name, &if_.eip, &if_.esp);
-  file_name[file_name_len] = last_char;
-
-  // Helper function for task 1.
-  // Author: Zackoric.
-  void load_stack(void)
-  {
-    char* argPtr = file_name;
-    const char* stackFrame = (char*) if_.esp;
-    char* stackPtr = (char*) if_.esp;
-		bool wasSapce = true;
-		int numTokens = 0;
-    void push_char(char c)
-    {
-      *--stackPtr = c;
-    }
-    void push_int(int i)
-    {
-      stackPtr -=4;
-      *((int*) stackPtr) = i;
-    }
-		for (int i = strlen(argPtr) - 1; i >= 0; i--)
-		{
-			if (argPtr[i] != ' ')
-			{
-				if (wasSapce)
-				{
-          push_char('\0');
-					numTokens++;
-				}
-        push_char(argPtr[i]);
-			}
-			wasSapce = argPtr[i] == ' ' ? true : false;
-		}
-		int argvLen = stackFrame - stackPtr;
-    for (int i = 0; i < (16 - (argvLen + (numTokens + 3) * 4) % 16) % 16; i ++)
-    {
-      push_char(0);
-    }
-    push_int(0);
-		bool isChar = false;
-		int offset = -1;
-		for (int i = 0; i < numTokens;)
-		{
-			if (offset < -argvLen) break;
-			isChar = stackFrame[offset] != '\0' ? true : false;
-			if (offset == - argvLen || (stackFrame[offset - 1] == '\0' && isChar))
-			{
-        push_int((int) stackFrame + offset);
-				i++;
-			}
-			offset--;
-		}
-    push_int((int) stackPtr);
-    push_int(numTokens);
-    if_.esp = stackPtr - 4;
-  }
 
   /* If load failed, quit. */
-  if (success)
-    load_stack();
   palloc_free_page (file_name);
-
-  // Signals to parent thread if thread was created successfully.
-  arg_set->succeed = success;
-
   if (!success)
-  {
-    sema_up(&arg_set->my_load_semaphore);
     thread_exit ();
-    NOT_REACHED ();
-  }
-  sema_up(&arg_set->my_load_semaphore);
 
   /* Start the user process by simulating a return from an
      interrupt, implemented by intr_exit (in
@@ -179,29 +87,12 @@ start_process (void *arg_set_)
    immediately, without waiting.
 
    This function will be implemented in problem 2-2.  For now, it
-   does nothing.
-*/
+   does nothing. */
 int
-process_wait (tid_t child_tid)
+process_wait (tid_t child_tid UNUSED)
 {
-  struct thread * t = thread_current(); 
-  // Iterates through parent thread's list of child wait statuses to find wait status with matching tid.
-  struct wait_status *child_wait_status = thread_get_wait_status(t, child_tid);
-  // Invalid tid.
-  if (child_wait_status == NULL)
-  {
-    return -1;
-  }
-  // Waits for child process to exit.
-  sema_down(&child_wait_status->o_sem_exited);
-  // If child was terminated by kernel, exit code is -1. 
-  // Otherwise, exit code is what child process returned.
-  int exit_code = child_wait_status->o_kernel_killed ? -1 : (int) child_wait_status->o_exit_code;
-  // Remove child wait status from parent's list of child wait statuses.
-  list_remove(&child_wait_status->wselem);
-  // Decrement reference count of chile wait status
-  wait_status_mod_ref(child_wait_status, -1);
-  return exit_code;
+  sema_down (&temporary);
+  return 0;
 }
 
 /* Free the current process's resources. */
@@ -210,16 +101,6 @@ process_exit (void)
 {
   struct thread *cur = thread_current ();
   uint32_t *pd;
-
-  /* Close current process and free file descriptors. */
-  file_close(cur->current_process);
-  int i;
-  for (i = 0; i < 128; i ++) {
-    if (cur->file_descriptors[i] != NULL) {
-      file_close(cur->file_descriptors[i]);
-      cur->file_descriptors[i] = NULL;
-    }
-  }
 
   /* Destroy the current process's page directory and switch back
      to the kernel-only page directory. */
@@ -237,9 +118,7 @@ process_exit (void)
       pagedir_activate (NULL);
       pagedir_destroy (pd);
     }
-    // Signal to parent that child process finished.
-    struct wait_status *my_wait_status = cur->o_wait_status;
-    sema_up (&my_wait_status->o_sem_exited);
+  sema_up (&temporary);
 }
 
 /* Sets up the CPU for running user code in the current
@@ -349,7 +228,6 @@ load (const char *file_name, void (**eip) (void), void **esp)
 
   /* Open executable file. */
   file = filesys_open (file_name);
-  t->current_process = file;
   if (file == NULL)
     {
       printf ("load: %s: open failed\n", file_name);
@@ -368,9 +246,6 @@ load (const char *file_name, void (**eip) (void), void **esp)
       printf ("load: %s: error loading executable\n", file_name);
       goto done;
     }
-
-  /* Deny write to executable. */
-  file_deny_write(file);
 
   /* Read program headers. */
   file_ofs = ehdr.e_phoff;
@@ -442,6 +317,7 @@ load (const char *file_name, void (**eip) (void), void **esp)
 
  done:
   /* We arrive here whether the load is successful or not. */
+  file_close (file);
   return success;
 }
 
