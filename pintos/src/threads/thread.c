@@ -297,6 +297,7 @@ thread_exit (void)
   /* Remove thread from all threads list, set our status to dying,
      and schedule another process.  That process will destroy us
      when it calls thread_schedule_tail(). */
+  
   intr_disable ();
   list_remove (&thread_current()->allelem);
   thread_current ()->status = THREAD_DYING;
@@ -583,6 +584,7 @@ thread_schedule_tail (struct thread *prev)
    has completed. */
 static void
 schedule (void)
+
 {
   struct thread *cur = running_thread ();
   struct thread *next = next_thread_to_run ();
@@ -645,7 +647,7 @@ static void thread_update_priority (struct thread *t, int p)
     if (p < get_ready_priority ())
     {
       //thread_update_ready_list(t);
-      //thread_yield ();
+      thread_yield ();
     }
     return;
   }
@@ -662,8 +664,8 @@ static void thread_update_priority (struct thread *t, int p)
 
 static bool ready_list_less (const struct list_elem *a, const struct list_elem *b, void *aux)
 {
-  return get_effective_priority (list_entry (b, struct thread, elem)) -
-    get_effective_priority (list_entry (a, struct thread, elem));
+  return get_effective_priority (list_entry (a, struct thread, elem)) -
+    get_effective_priority (list_entry (b, struct thread, elem)) > 0 ? true : false;
 }
 
 static void thread_update_ready_list (struct thread *t)
@@ -677,5 +679,6 @@ static void thread_add_to_ready_list (struct thread *t)
 {
   ASSERT (is_thread (t));
   ASSERT (t->status != THREAD_DYING);
+  //printf("inserting p: %d\n", t->priority);
   list_insert_ordered (&ready_list, &t->elem, ready_list_less, NULL);
 }
