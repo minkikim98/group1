@@ -345,8 +345,11 @@ cond_signal (struct condition *cond, struct lock *lock UNUSED)
   {
     struct list_elem *e;
     struct semaphore_elem *s = list_entry (list_begin (&cond->waiters), struct semaphore_elem, elem);
-    LIST_ITER (e, &cond->waiters)
+    for (e = list_begin (&cond->waiters); e!= list_end(&cond->waiters); e = list_next(e))
     {
+    // struct semaphore_elem *s = list_entry (list_begin (&cond->waiters), struct semaphore_elem, elem);
+    // LIST_ITER (e, &cond->waiters)
+    // {
       struct semaphore_elem *temp = list_entry (e, struct semaphore_elem, elem);
       if (get_pri (temp) > get_pri (s))
       {
