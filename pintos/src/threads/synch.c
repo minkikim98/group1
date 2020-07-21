@@ -109,14 +109,22 @@ void
 sema_up (struct semaphore *sema)
 {
   enum intr_level old_level;
-
+  // list_sort(&sema->waiters, ready_list_less, NULL);
+  // t = list_entry (list_begin (&sema->waiters),
+  //                             struct thread, elem);
+  //printf("current thread p: %d\n", thread_current ()->priority);
+  //msg("Hi");
   ASSERT (sema != NULL);
-
+  //printf("Sema upping p: %d\n", thread_current ()->priority);
   old_level = intr_disable ();
-  if (!list_empty (&sema->waiters))
-    thread_unblock (list_entry (list_pop_front (&sema->waiters),
-                                struct thread, elem));
   sema->value++;
+  if (!list_empty (&sema->waiters))
+  {
+    list_sort(&sema->waiters, ready_list_less, NULL);
+    struct thread *t = list_entry (list_pop_front (&sema->waiters),
+                                struct thread, elem);
+    thread_unblock (t);
+  }
   intr_set_level (old_level);
 }
 
@@ -317,8 +325,13 @@ cond_signal (struct condition *cond, struct lock *lock UNUSED)
   ASSERT (lock_held_by_current_thread (lock));
 
   if (!list_empty (&cond->waiters))
+  {
+    // list_sort(&sema->waiters, ready_list_less, NULL);
+    // struct thread *t = list_entry (list_pop_front (&cond->waiters),
+    //                             struct thread, elem);
     sema_up (&list_entry (list_pop_front (&cond->waiters),
                           struct semaphore_elem, elem)->semaphore);
+  }
 }
 
 /* Wakes up all threads, if any, waiting on COND (protected by

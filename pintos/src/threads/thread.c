@@ -245,9 +245,28 @@ thread_unblock (struct thread *t)
   old_level = intr_disable ();
   ASSERT (t->status == THREAD_BLOCKED);
   thread_add_to_ready_list (t);
+  
+  // if (get_effective_priority (t) > get_effective_priority (thread_current ()))
+  // {
+  //   thread_yield();
+  //   return;
+  // }
   //list_push_back (&ready_list, &t->elem);
   t->status = THREAD_READY;
   intr_set_level (old_level);
+  
+  if (get_ready_priority () > get_effective_priority (thread_current ()))
+  {
+    thread_yield();
+    return;
+  }
+  //thread_yield ();
+  
+    // if (get_effective_priority (t) > get_effective_priority (thread_current ()))
+    // {
+    //   thread_yield();
+    //   return;
+    // }
 }
 
 /* Returns the name of the running thread. */
@@ -617,18 +636,13 @@ allocate_tid (void)
    Used by switch.S, which can't figure it out on its own. */
 uint32_t thread_stack_ofs = offsetof (struct thread, stack);
 
-#define max(a,b) \
-   ({ __typeof__ (a) _a = (a); \
-       __typeof__ (b) _b = (b); \
-     _a > _b ? _a : _b; })
-
-inline static int get_effective_priority (struct thread *t)
+bool ready_list_less (const struct list_elem *a, const struct list_elem *b, void *aux UNUSED)
 {
-  ASSERT (is_thread (t));
-  return max(t->priority, t->o_donated_priority);
+  return get_effective_priority (list_entry (a, struct thread, elem)) -
+    get_effective_priority (list_entry (b, struct thread, elem)) > 0 ? true : false;
 }
 
-inline static int get_ready_priority (void)
+int get_ready_priority (void)
 {
   if (list_empty(&ready_list)) return -1;
   return get_effective_priority (
@@ -653,19 +667,16 @@ static void thread_update_priority (struct thread *t, int p)
   }
   else if (t->status == THREAD_READY)
   {
+    thread_exit();
     thread_update_ready_list(t);
     return;
   }
   else if (t->status == THREAD_BLOCKED)
   {
+    thread_exit();
     return;
   }
-}
-
-static bool ready_list_less (const struct list_elem *a, const struct list_elem *b, void *aux)
-{
-  return get_effective_priority (list_entry (a, struct thread, elem)) -
-    get_effective_priority (list_entry (b, struct thread, elem)) > 0 ? true : false;
+  thread_exit();
 }
 
 static void thread_update_ready_list (struct thread *t)

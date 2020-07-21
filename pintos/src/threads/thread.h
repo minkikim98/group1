@@ -144,4 +144,18 @@ void thread_set_nice (int);
 int thread_get_recent_cpu (void);
 int thread_get_load_avg (void);
 
+#define max(a,b) \
+   ({ __typeof__ (a) _a = (a); \
+       __typeof__ (b) _b = (b); \
+     _a > _b ? _a : _b; })
+
+inline int get_effective_priority (struct thread *t)
+{
+  return max(t->priority, t->o_donated_priority);
+}
+
+bool ready_list_less (const struct list_elem *a, const struct list_elem *b, void *aux);
+
+int get_ready_priority (void);
+
 #endif /* threads/thread.h */
