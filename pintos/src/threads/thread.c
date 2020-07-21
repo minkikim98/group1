@@ -528,21 +528,22 @@ next_thread_to_run (void)
     // struct thread *t = list_entry (list_pop_front (&ready_list), struct thread, elem);
     // return t;
     //old_level = intr_disable ();
-    struct list_elem *e;
+    // struct list_elem *e;
     
-    for (e = list_begin (&ready_list); e != list_end (&ready_list);
-       e = list_next (e))
-    {
-      struct thread *t = list_entry (e, struct thread, elem);
-      //intr_set_level (old_level);
-      // list_remove (e);
-      // return t;
-      if (t->o_ready_tick <= timer_ticks ())
-      {
-        list_remove (e);
-        return t;
-      }
-    }//list_entry (list_pop_front (&ready_list), struct thread, elem);
+    // for (e = list_begin (&ready_list); e != list_end (&ready_list);
+    //    e = list_next (e))
+    // {
+    //   struct thread *t = list_entry (e, struct thread, elem);
+    //   //intr_set_level (old_level);
+    //   // list_remove (e);
+    //   // return t;
+    //   if (t->o_ready_tick <= timer_ticks ())
+    //   {
+    //     list_remove (e);
+    //     return t;
+    //   }
+    // }
+    list_entry (list_pop_front (&ready_list), struct thread, elem);
     //intr_set_level (old_level);
     return idle_thread;
   }
@@ -651,7 +652,7 @@ int get_ready_priority (void)
 
 static void thread_update_priority (struct thread *t, int p)
 {
-
+  return;
   ASSERT (is_thread (t));
   ASSERT (t->status != THREAD_DYING);
 
@@ -681,6 +682,7 @@ static void thread_update_priority (struct thread *t, int p)
 
 static void thread_update_ready_list (struct thread *t)
 {
+  return;
   ASSERT (is_thread (t));
   list_remove (&t->elem);
   list_insert_ordered (&ready_list, &t->elem, ready_list_less, NULL);
@@ -688,6 +690,8 @@ static void thread_update_ready_list (struct thread *t)
 
 static void thread_add_to_ready_list (struct thread *t)
 {
+  //list_push_front()
+  return;
   ASSERT (is_thread (t));
   ASSERT (t->status != THREAD_DYING);
   //printf("inserting p: %d\n", t->priority);
