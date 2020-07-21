@@ -24,6 +24,8 @@
    that are ready to run but not actually running. */
 static struct list ready_list;
 
+static struct list sleeping_list;
+
 /* List of all processes.  Processes are added to this list
    when they are first scheduled and removed when they exit. */
 static struct list all_list;
@@ -70,7 +72,7 @@ static void *alloc_frame (struct thread *, size_t size);
 static void schedule (void);
 void thread_schedule_tail (struct thread *prev);
 static tid_t allocate_tid (void);
-
+static struct thread *get_highest_priority_thread_ready (void);
 /* Initializes the threading system by transforming the code
    that's currently running into a thread.  This can't work in
    general and it is possible in this case only because loader.S
@@ -91,6 +93,7 @@ thread_init (void)
 
   lock_init (&tid_lock);
   list_init (&ready_list);
+  list_init (&sleeping_list);
   list_init (&all_list);
 
   /* Set up a thread structure for the running thread. */
@@ -137,6 +140,29 @@ thread_tick (void)
   /* Enforce preemption. */
   if (++thread_ticks >= TIME_SLICE)
     intr_yield_on_return ();
+  
+  enum intr_level old_level = intr_disable ();
+  if (!list_empty (&sleeping_list))
+  {
+    struct list_elem *e;
+    bool has_awaken;
+    do
+    {
+      has_awaken = false;
+      LIST_ITER (e, &sleeping_list)
+      {
+        if ( ENTRY_THREAD_ELEM (e)->o_wake_tick <= timer_ticks ())
+        {
+          struct thread *h_t = ENTRY_THREAD_ELEM (e);
+          list_remove (&h_t->elem);
+          thread_unblock (h_t);
+          has_awaken = true;
+          break;
+        }
+      }
+    } while (has_awaken);
+  }
+  intr_set_level (old_level);
 }
 
 /* Prints thread statistics. */
@@ -200,6 +226,11 @@ thread_create (const char *name, int priority,
 
   /* Add to run queue. */
   thread_unblock (t);
+
+  if ( get_effective_priority (t) > get_effective_priority ( thread_current ()))
+  {
+    thread_yield ();
+  }
 
   return tid;
 }
@@ -314,6 +345,24 @@ thread_yield (void)
   intr_set_level (old_level);
 }
 
+/* Yields the CPU.  The current thread is not put to sleep and
+   may be scheduled again immediately at the scheduler's whim. */
+void
+thread_sleep (void)
+{
+  struct thread *cur = thread_current ();
+  enum intr_level old_level;
+
+  ASSERT (!intr_context ());
+
+  old_level = intr_disable ();
+  if (cur != idle_thread)
+    list_push_back (&sleeping_list, &cur->elem);
+  cur->status = THREAD_BLOCKED;
+  schedule ();
+  intr_set_level (old_level);
+}
+
 /* Invoke function 'func' on all threads, passing along 'aux'.
    This function must be called with interrupts off. */
 void
@@ -336,6 +385,8 @@ void
 thread_set_priority (int new_priority)
 {
   thread_current ()->priority = new_priority;
+  if (get_effective_priority (get_highest_priority_thread_ready ()) > get_effective_priority (thread_current ()))
+    thread_yield();
 }
 
 /* Returns the current thread's priority. */
@@ -462,6 +513,8 @@ init_thread (struct thread *t, const char *name, int priority)
   strlcpy (t->name, name, sizeof t->name);
   t->stack = (uint8_t *) t + PGSIZE;
   t->priority = priority;
+  t->o_donated_priority = PRI_MIN;
+  t->o_wake_tick = 0;
   t->magic = THREAD_MAGIC;
 
   old_level = intr_disable ();
@@ -493,7 +546,12 @@ next_thread_to_run (void)
   if (list_empty (&ready_list))
     return idle_thread;
   else
-    return list_entry (list_pop_front (&ready_list), struct thread, elem);
+  {
+    //return list_entry (list_pop_front (&ready_list), struct thread, elem);
+    struct thread *h_t = get_highest_priority_thread_ready ();
+    list_remove (&h_t->elem);
+    return h_t;
+  }
 }
 
 /* Completes a thread switch by activating the new thread's page
@@ -582,3 +640,19 @@ allocate_tid (void)
 /* Offset of `stack' member within `struct thread'.
    Used by switch.S, which can't figure it out on its own. */
 uint32_t thread_stack_ofs = offsetof (struct thread, stack);
+
+struct thread *get_highest_priority_thread_ready (void)
+{
+  enum intr_level old_level = intr_disable ();
+  struct list_elem *e;
+  struct thread *h_t = ENTRY_THREAD_ELEM (list_begin (&ready_list));
+  LIST_ITER (e, &ready_list)
+  {
+    if ( get_effective_priority (ENTRY_THREAD_ELEM (e)) > get_effective_priority (h_t))
+    {
+      h_t = ENTRY_THREAD_ELEM (e);
+    }
+  }
+  intr_set_level (old_level);
+  return h_t;
+}

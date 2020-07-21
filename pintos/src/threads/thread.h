@@ -90,7 +90,10 @@ struct thread
     char name[16];                      /* Name (for debugging purposes). */
     uint8_t *stack;                     /* Saved stack pointer. */
     int priority;                       /* Priority. */
+    int o_donated_priority;
     struct list_elem allelem;           /* List element for all threads list. */
+
+    int64_t o_wake_tick;
 
     /* Shared between thread.c and synch.c. */
     struct list_elem elem;              /* List element. */
@@ -127,6 +130,7 @@ const char *thread_name (void);
 
 void thread_exit (void) NO_RETURN;
 void thread_yield (void);
+void thread_sleep (void);
 
 /* Performs some operation on thread t, given auxiliary data AUX. */
 typedef void thread_action_func (struct thread *t, void *aux);
@@ -139,5 +143,18 @@ int thread_get_nice (void);
 void thread_set_nice (int);
 int thread_get_recent_cpu (void);
 int thread_get_load_avg (void);
+
+#define LIST_ITER(e, list) for (e = list_begin (list); e != list_end (list); e = list_next (e))
+#define ENTRY_THREAD_ELEM(e) list_entry (e, struct thread, elem)
+
+#define max(a,b) \
+   ({ __typeof__ (a) _a = (a); \
+       __typeof__ (b) _b = (b); \
+     _a > _b ? _a : _b; })
+
+inline int get_effective_priority (struct thread *t)
+{
+  return max(t->priority, t->o_donated_priority);
+}
 
 #endif /* threads/thread.h */
