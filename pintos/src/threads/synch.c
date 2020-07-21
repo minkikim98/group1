@@ -339,6 +339,8 @@ cond_signal (struct condition *cond, struct lock *lock UNUSED)
   {
     return get_effective_priority (list_entry (list_begin (&se->semaphore.waiters), struct thread, elem));
   }
+
+  /* If there are any threads waiting on COND, do the following, else do nothing. */
   if (!list_empty (&cond->waiters))
   {
     struct list_elem *e;
