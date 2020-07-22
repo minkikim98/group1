@@ -225,10 +225,18 @@ thread_create (const char *name, int priority,
   sf->ebp = 0;
 
   /* Add to run queue. */
+  //msg ("%d", t->priority);
   thread_unblock (t);
+  //printf ("s");
 
+  barrier();
   if ( get_effective_priority (t) > get_effective_priority ( thread_current ()))
   {
+    if (t->priority == 24)
+    {
+      //msg ("yielding");
+    }
+    //msg ("yielding");
     thread_yield ();
   }
 
@@ -333,6 +341,7 @@ void
 thread_yield (void)
 {
   struct thread *cur = thread_current ();
+  //printf ("")
   enum intr_level old_level;
 
   ASSERT (!intr_context ());
@@ -384,9 +393,12 @@ thread_foreach (thread_action_func *func, void *aux)
 void
 thread_set_priority (int new_priority)
 {
+  enum intr_level old_level;
+  old_level = intr_disable ();
   thread_current ()->priority = new_priority;
   if (get_effective_priority (get_highest_priority_thread_ready ()) > get_effective_priority (thread_current ()))
     thread_yield();
+  intr_set_level (old_level);
 }
 
 /* Returns the current thread's priority. */

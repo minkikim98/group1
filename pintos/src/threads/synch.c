@@ -201,14 +201,16 @@ lock_init (struct lock *lock)
 
 void donate_priority (struct thread *t)
 {
+  barrier ();
   struct lock *lock = t->o_waiting_on_lock;
   if (lock == NULL) return;
   else
   {
     //printf ("lock location: %04x\n", lock);
+    enum intr_level old_level;
     lock->holder->o_donated_priority = 
     max (lock->holder->o_donated_priority, get_effective_priority (t));
-    //donate_priority (lock->holder);
+    donate_priority (lock->holder);
     //printf ("priority donating\n");
   }
 }
@@ -224,6 +226,14 @@ void donate_priority (struct thread *t)
 void
 lock_acquire (struct lock *lock)
 {
+  if (thread_current ()->priority == 24)
+  {
+    for (int i = 0; i < 1000000; i ++)
+    barrier ();
+  }
+  //msg ("thread of pri: %d acquiring\n", thread_current ()->priority);
+  ASSERT (!intr_context ());
+  barrier ();
   ASSERT (lock != NULL);
   ASSERT (!intr_context ());
   ASSERT (!lock_held_by_current_thread (lock));
@@ -245,7 +255,10 @@ lock_acquire (struct lock *lock)
   {
     //printf ("Lock already acquired by %s\n", cur->name);
     cur->o_waiting_on_lock = lock;
-    donate_priority (cur);
+    // donate_priority (cur);
+    if (cur->tid >= 2)
+      donate_priority (cur);
+    //lock->holder->o_donated_priority = max (lock->holder->o_donated_priority, get_effective_priority (cur));
     list_push_front (&lock->o_waiter, &cur->elem);
     //printf ("Lock acq blocking by %s\n", cur->name);
     thread_block ();
@@ -273,11 +286,11 @@ lock_acquire (struct lock *lock)
 bool
 lock_try_acquire (struct lock *lock)
 {
+  printf ("TRIEED TO SEMA !\n");
   bool success;
 
   ASSERT (lock != NULL);
   ASSERT (!lock_held_by_current_thread (lock));
-  printf ("TRIEED TO SEMA !\n");
   success = sema_try_down (&lock->semaphore);
   if (success)
     lock->holder = thread_current ();
@@ -301,6 +314,8 @@ int64_t get_effective_priority_lock (struct lock *lock)
 void
 lock_release (struct lock *lock)
 {
+  barrier ();
+  ASSERT (!intr_context ());
   ASSERT (lock != NULL);
   ASSERT (lock_held_by_current_thread (lock));
 
@@ -458,8 +473,9 @@ cond_signal (struct condition *cond, struct lock *lock UNUSED)
   {
     return get_effective_priority (list_entry (list_begin (&se->semaphore.waiters), struct thread, elem));
   }
-
+  barrier ();
   /* If there are any threads waiting on COND, do the following, else do nothing */
+  //msg ("Cond var");
   if (!list_empty (&cond->waiters))
   {
     struct semaphore_elem *s;
