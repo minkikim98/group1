@@ -205,6 +205,7 @@ void donate_priority (struct thread *t)
   if (lock == NULL) return;
   else
   {
+    //printf ("lock location: %04x\n", lock);
     lock->holder->o_donated_priority = 
     max (lock->holder->o_donated_priority, get_effective_priority (t));
     //donate_priority (lock->holder);
@@ -276,7 +277,7 @@ lock_try_acquire (struct lock *lock)
 
   ASSERT (lock != NULL);
   ASSERT (!lock_held_by_current_thread (lock));
-
+  printf ("TRIEED TO SEMA !\n");
   success = sema_try_down (&lock->semaphore);
   if (success)
     lock->holder = thread_current ();
@@ -320,7 +321,6 @@ lock_release (struct lock *lock)
   int i = 0;
   struct list_elem *e;
   LIST_ITER (e, &cur->o_locks)
-  //for (struct list_elem *e = list_begin (&cur->o_locks);e != list_end (&cur->o_locks); e = list_next (e))
   {
     l = list_entry (e, struct lock, elem);
     if (l == lock)
