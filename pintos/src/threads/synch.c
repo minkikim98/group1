@@ -458,13 +458,14 @@ cond_signal (struct condition *cond, struct lock *lock UNUSED)
   {
     return get_effective_priority (list_entry (list_begin (&se->semaphore.waiters), struct thread, elem));
   }
+
+  /* If there are any threads waiting on COND, do the following, else do nothing */
   if (!list_empty (&cond->waiters))
   {
     struct semaphore_elem *s;
     LIST_MAX (s, get_pri, &cond->waiters, e, struct semaphore_elem, elem);
     list_remove (&s->elem);
     sema_up (&s->semaphore);
-    //sema_up (&list_entry (list_pop_front (&cond->waiters), struct semaphore_elem, elem)->semaphore);
   }
 }
 
