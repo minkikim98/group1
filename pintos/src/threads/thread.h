@@ -95,6 +95,9 @@ struct thread
 
     int64_t o_wake_tick;
 
+    struct list o_locks;
+    struct lock *o_waiting_on_lock;
+
     /* Shared between thread.c and synch.c. */
     struct list_elem elem;              /* List element. */
 
@@ -151,6 +154,14 @@ int thread_get_load_avg (void);
    ({ __typeof__ (a) _a = (a); \
        __typeof__ (b) _b = (b); \
      _a > _b ? _a : _b; })
+
+#define LIST_MAX(t, f, list, e, type, elem) \
+  struct list_elem *e;\
+  t = list_entry (list_begin (list), type, elem);\
+  LIST_ITER (e, list)\
+  { \
+    if ( f (list_entry (e, type, elem)) > f (t)) t = list_entry (e, type, elem);\
+  }
 
 inline int get_effective_priority (struct thread *t)
 {

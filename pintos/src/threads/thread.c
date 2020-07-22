@@ -393,7 +393,7 @@ thread_set_priority (int new_priority)
 int
 thread_get_priority (void)
 {
-  return thread_current ()->priority;
+  return get_effective_priority (thread_current ());//->priority;
 }
 
 /* Sets the current thread's nice value to NICE. */
@@ -516,6 +516,8 @@ init_thread (struct thread *t, const char *name, int priority)
   t->o_donated_priority = PRI_MIN;
   t->o_wake_tick = 0;
   t->magic = THREAD_MAGIC;
+  t->o_waiting_on_lock = NULL;
+  list_init (&t->o_locks);
 
   old_level = intr_disable ();
   list_push_back (&all_list, &t->allelem);
