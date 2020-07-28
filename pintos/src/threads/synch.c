@@ -200,10 +200,16 @@ void donate_priority (struct thread *t)
   else
   {
     //printf ("lock location: %04x\n", lock);
-    enum intr_level old_level;
-    lock->holder->o_donated_priority = 
-    max (lock->holder->o_donated_priority, get_effective_priority (t));
-    donate_priority (lock->holder);
+    if (lock->holder == NULL)
+    {
+      return;
+    }
+    if (lock->holder->o_donated_priority < get_effective_priority (t))
+    {
+      lock->holder->o_donated_priority = 
+        max (lock->holder->o_donated_priority, get_effective_priority (t));
+      donate_priority (lock->holder);
+    }
     //printf ("priority donating\n");
   }
 }
@@ -224,23 +230,45 @@ lock_acquire (struct lock *lock)
   ASSERT (lock != NULL);
   ASSERT (!intr_context ());
   ASSERT (!lock_held_by_current_thread (lock));
-
   struct thread *cur = thread_current ();
-
+  //if (cur->priority == 24)
+  //for (int i = 0; i < 1000000;i ++) barrier ();
+  ASSERT (cur != NULL && cur->magic == 0xcd6abf4b);
+  // printf ("AUGHHHHH!!!!!\n");
+  ASSERT (cur != NULL && cur->magic == 0xcd6abf4b);
+  // printf ("b4 thread_current!!!!!\n");
+  // printf ("after thread_current!!!!!\n");
   enum intr_level old_level = intr_disable ();
+  //printf ("I like Music!\n");
+      // printf ("I crash 1 !!!!!\n");
   while (lock->holder)
   {
+    //printf ("I am in Hoarder loop!\n");
+      // printf ("I crash 2!!!!!\n");
+    struct list_elem *e;
+    LIST_ITER (e, &lock->o_waiter)
+    {
+      ASSERT (list_entry (e, struct thread, elem) != cur);
+    }
     list_push_front (&lock->o_waiter, &cur->elem);
     cur->o_waiting_on_lock = lock;
+    ASSERT (lock->holder != NULL && lock->holder->magic == 0xcd6abf4b);
+    // printf ("Holder of lock: %d\n", lock->holder->priority);
+    //if (lock->holder->o_donated_priority < get_effective_priority (cur))
+    //  lock->holder->o_donated_priority = max (lock->holder->o_donated_priority, get_effective_priority (cur));
     donate_priority (cur);
     thread_block ();
   }
+      // printf ("I crash 3!!!!!\n");
+  //printf ("I am out of  Hoarder loop!\n");
 
   lock->holder = cur;
   cur->o_waiting_on_lock = NULL;
   list_push_front (&cur->o_locks, &lock->elem);
 
   intr_set_level (old_level);
+    ASSERT (cur != NULL && cur->magic == 0xcd6abf4b);
+  // printf ("Lock_acquire welp!\n");
 }
 
 /* Tries to acquires LOCK and returns true if successful or false
@@ -285,9 +313,7 @@ lock_release (struct lock *lock)
 {
   ASSERT (lock != NULL);
   ASSERT (lock_held_by_current_thread (lock));
-
   struct thread *cur = thread_current ();
-
   enum intr_level old_level = intr_disable ();
   
   lock->holder = NULL;
@@ -295,10 +321,9 @@ lock_release (struct lock *lock)
 
   list_remove (&lock->elem);
 
-  // 
-
   struct list_elem* e;
 
+  //printf ("I have still have %d locks\n", list_size (&cur->o_locks));
   if (!list_empty (&cur->o_locks))
   {
     LIST_ITER (e, &cur->o_locks)
@@ -313,7 +338,7 @@ lock_release (struct lock *lock)
 
   if (!list_empty (&lock->o_waiter))
   {
-    // printf ("finding waiters\n");
+    //printf ("finding waiters\n");
     struct thread *t;
     LIST_MAX (t, get_effective_priority, &lock->o_waiter, e, struct thread, elem);
     list_remove (&t->elem);
@@ -326,11 +351,12 @@ lock_release (struct lock *lock)
   }
   else
   {
-    
     //printf ("no waiters\n");
   }
   
   intr_set_level (old_level);
+  //printf ("Lock_release welp!\n");
+    ASSERT (cur != NULL && cur->magic == 0xcd6abf4b);
 }
 
 /* Returns true if the current thread holds LOCK, false

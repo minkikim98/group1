@@ -410,7 +410,7 @@ thread_set_priority (int new_priority)
 int
 thread_get_priority (void)
 {
-  return thread_current ()->priority;
+  return get_effective_priority (thread_current ());
 }
 
 /* Sets the current thread's nice value to NICE. */
@@ -566,7 +566,11 @@ next_thread_to_run (void)
   if (list_empty (&ready_list))
     return idle_thread;
   else
-    return list_entry (list_pop_front (&ready_list), struct thread, elem);
+  {
+    struct thread * thread = get_highest_priority_thread_ready ();
+    list_remove (&thread->elem);
+    return thread;
+  }
 }
 
 /* Completes a thread switch by activating the new thread's page
