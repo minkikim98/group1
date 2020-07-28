@@ -23,7 +23,6 @@
 /* List of processes in THREAD_READY state, that is, processes
    that are ready to run but not actually running. */
 static struct list ready_list;
-
 static struct list sleeping_list;
 
 /* List of all processes.  Processes are added to this list
@@ -72,7 +71,9 @@ static void *alloc_frame (struct thread *, size_t size);
 static void schedule (void);
 void thread_schedule_tail (struct thread *prev);
 static tid_t allocate_tid (void);
+
 static struct thread *get_highest_priority_thread_ready (void);
+
 /* Initializes the threading system by transforming the code
    that's currently running into a thread.  This can't work in
    general and it is possible in this case only because loader.S
@@ -93,8 +94,8 @@ thread_init (void)
 
   lock_init (&tid_lock);
   list_init (&ready_list);
-  list_init (&sleeping_list);
   list_init (&all_list);
+  list_init (&sleeping_list);
 
   /* Set up a thread structure for the running thread. */
   initial_thread = running_thread ();
@@ -137,11 +138,10 @@ thread_tick (void)
   else
     kernel_ticks++;
 
-  /* Enforce preemption. */
-  if (++thread_ticks >= TIME_SLICE)
-    intr_yield_on_return ();
-  
-  enum intr_level old_level = intr_disable ();
+  /* Enforce preemption. Not doing that. */
+  // if (++thread_ticks >= TIME_SLICE)
+  //   intr_yield_on_return ();
+
   if (!list_empty (&sleeping_list))
   {
     struct list_elem *e;
@@ -153,16 +153,21 @@ thread_tick (void)
       {
         if ( ENTRY_THREAD_ELEM (e)->o_wake_tick <= timer_ticks ())
         {
-          struct thread *h_t = ENTRY_THREAD_ELEM (e);
-          list_remove (&h_t->elem);
-          thread_unblock (h_t);
+          struct thread *thread = ENTRY_THREAD_ELEM (e);
+          list_remove (&thread->elem);
+          thread_unblock (thread);
           has_awaken = true;
           break;
         }
       }
     } while (has_awaken);
   }
-  intr_set_level (old_level);
+  struct thread *my_ready_next = get_highest_priority_thread_ready ();
+  if (my_ready_next)
+  {
+    if ( get_effective_priority (my_ready_next) > get_effective_priority (t))
+      intr_yield_on_return ();
+  }
 }
 
 /* Prints thread statistics. */
@@ -225,21 +230,14 @@ thread_create (const char *name, int priority,
   sf->ebp = 0;
 
   /* Add to run queue. */
-  //msg ("%d", t->priority);
   thread_unblock (t);
-  //printf ("s");
 
-  barrier();
-  if ( get_effective_priority (t) > get_effective_priority ( thread_current ()))
-  {
-    if (t->priority == 24)
-    {
-      //msg ("yielding");
-    }
-    //msg ("yielding");
+  enum intr_level old_level = intr_disable ();
+
+  struct thread *my_ready_next = get_highest_priority_thread_ready ();
+  if ( my_ready_next && get_effective_priority (my_ready_next) > get_effective_priority ( thread_current ()))
     thread_yield ();
-  }
-
+  intr_set_level (old_level);
   return tid;
 }
 
@@ -341,7 +339,6 @@ void
 thread_yield (void)
 {
   struct thread *cur = thread_current ();
-  //printf ("")
   enum intr_level old_level;
 
   ASSERT (!intr_context ());
@@ -354,8 +351,6 @@ thread_yield (void)
   intr_set_level (old_level);
 }
 
-/* Yields the CPU.  The current thread is not put to sleep and
-   may be scheduled again immediately at the scheduler's whim. */
 void
 thread_sleep (void)
 {
@@ -363,6 +358,7 @@ thread_sleep (void)
   enum intr_level old_level;
 
   ASSERT (!intr_context ());
+  ASSERT (is_thread (cur));
 
   old_level = intr_disable ();
   if (cur != idle_thread)
@@ -393,11 +389,20 @@ thread_foreach (thread_action_func *func, void *aux)
 void
 thread_set_priority (int new_priority)
 {
-  enum intr_level old_level;
-  old_level = intr_disable ();
-  thread_current ()->priority = new_priority;
-  if (get_effective_priority (get_highest_priority_thread_ready ()) > get_effective_priority (thread_current ()))
-    thread_yield();
+  ASSERT (!intr_context ());
+
+  enum intr_level old_level = intr_disable ();
+
+  struct thread *cur = thread_current ();
+  
+  cur->priority = new_priority;
+  struct thread *my_high_ready = get_highest_priority_thread_ready ();
+  if (my_high_ready)
+    if (get_effective_priority (my_high_ready) > get_effective_priority (cur))
+    {
+      thread_yield();
+    }
+
   intr_set_level (old_level);
 }
 
@@ -405,7 +410,7 @@ thread_set_priority (int new_priority)
 int
 thread_get_priority (void)
 {
-  return get_effective_priority (thread_current ());//->priority;
+  return thread_current ()->priority;
 }
 
 /* Sets the current thread's nice value to NICE. */
@@ -525,9 +530,10 @@ init_thread (struct thread *t, const char *name, int priority)
   strlcpy (t->name, name, sizeof t->name);
   t->stack = (uint8_t *) t + PGSIZE;
   t->priority = priority;
+  t->magic = THREAD_MAGIC;
+  
   t->o_donated_priority = PRI_MIN;
   t->o_wake_tick = 0;
-  t->magic = THREAD_MAGIC;
   t->o_waiting_on_lock = NULL;
   list_init (&t->o_locks);
 
@@ -560,12 +566,7 @@ next_thread_to_run (void)
   if (list_empty (&ready_list))
     return idle_thread;
   else
-  {
-    //return list_entry (list_pop_front (&ready_list), struct thread, elem);
-    struct thread *h_t = get_highest_priority_thread_ready ();
-    list_remove (&h_t->elem);
-    return h_t;
-  }
+    return list_entry (list_pop_front (&ready_list), struct thread, elem);
 }
 
 /* Completes a thread switch by activating the new thread's page
@@ -658,15 +659,20 @@ uint32_t thread_stack_ofs = offsetof (struct thread, stack);
 struct thread *get_highest_priority_thread_ready (void)
 {
   enum intr_level old_level = intr_disable ();
+  if (list_empty (&ready_list))
+  {
+    intr_set_level (old_level);
+    return NULL;
+  }
   struct list_elem *e;
-  struct thread *h_t = ENTRY_THREAD_ELEM (list_begin (&ready_list));
+  struct thread *thread = ENTRY_THREAD_ELEM (list_begin (&ready_list));
   LIST_ITER (e, &ready_list)
   {
-    if ( get_effective_priority (ENTRY_THREAD_ELEM (e)) > get_effective_priority (h_t))
+    if ( get_effective_priority (ENTRY_THREAD_ELEM (e)) > get_effective_priority (thread))
     {
-      h_t = ENTRY_THREAD_ELEM (e);
+      thread = ENTRY_THREAD_ELEM (e);
     }
   }
   intr_set_level (old_level);
-  return h_t;
+  return thread;
 }

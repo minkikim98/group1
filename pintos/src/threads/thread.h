@@ -92,7 +92,6 @@ struct thread
     int priority;                       /* Priority. */
     int o_donated_priority;
     struct list_elem allelem;           /* List element for all threads list. */
-
     int64_t o_wake_tick;
 
     struct list o_locks;
@@ -100,7 +99,6 @@ struct thread
 
     /* Shared between thread.c and synch.c. */
     struct list_elem elem;              /* List element. */
-    struct list_elem lock_elem;              /* List element. */
 
 #ifdef USERPROG
     /* Owned by userprog/process.c. */
@@ -127,6 +125,7 @@ tid_t thread_create (const char *name, int priority, thread_func *, void *);
 
 void thread_block (void);
 void thread_unblock (struct thread *);
+void thread_sleep (void);
 
 struct thread *thread_current (void);
 tid_t thread_tid (void);
@@ -134,7 +133,6 @@ const char *thread_name (void);
 
 void thread_exit (void) NO_RETURN;
 void thread_yield (void);
-void thread_sleep (void);
 
 /* Performs some operation on thread t, given auxiliary data AUX. */
 typedef void thread_action_func (struct thread *t, void *aux);
@@ -166,6 +164,7 @@ int thread_get_load_avg (void);
 
 inline int get_effective_priority (struct thread *t)
 {
+  ASSERT (t != NULL);
   return max(t->priority, t->o_donated_priority);
 }
 
