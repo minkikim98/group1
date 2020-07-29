@@ -106,10 +106,12 @@ sema_try_down (struct semaphore *sema)
 
    This function may be called from an interrupt handler.
 
-   Edited for Task 2. Must test for yield upon a sema_up.
+   Modified for Task 2. Must test for yield upon a sema_up.
    Iterates on the list of threads waiting on the semaphore
    to find the highest priority (using our LIST_MAX macro) thread
    unblocks, and checks for yielding (not in interrupt context).
+
+   It's used by cond_signal as well. 
     */
 void
 sema_up (struct semaphore *sema)
@@ -335,7 +337,6 @@ lock_release (struct lock *lock)
     }
   }
 
-
   intr_set_level (old_level);
   ASSERT (cur != NULL && cur->magic == 0xcd6abf4b);
 }
@@ -412,7 +413,9 @@ cond_wait (struct condition *cond, struct lock *lock)
 
    An interrupt handler cannot acquire a lock, so it does not
    make sense to try to signal a condition variable within an
-   interrupt handler. */
+   interrupt handler.
+
+   Modified for Task 2. It will yield in the sema_up call.  */
 void
 cond_signal (struct condition *cond, struct lock *lock UNUSED)
 {

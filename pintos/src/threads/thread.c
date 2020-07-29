@@ -23,6 +23,8 @@
 /* List of processes in THREAD_READY state, that is, processes
    that are ready to run but not actually running. */
 static struct list ready_list;
+
+/* List of processes that are sleeping - used for Task 1 by thread_tick(...). */
 static struct list sleeping_list;
 
 /* List of all processes.  Processes are added to this list
@@ -72,6 +74,7 @@ static void schedule (void);
 void thread_schedule_tail (struct thread *prev);
 static tid_t allocate_tid (void);
 
+/* Returns the thread struct of the highest priority thread that's ready*/
 static struct thread *get_highest_priority_thread_ready (void);
 
 /* Initializes the threading system by transforming the code
@@ -407,7 +410,8 @@ thread_set_priority (int new_priority)
   intr_set_level (old_level);
 }
 
-/* Returns the current thread's priority. */
+/* Returns the current thread's priority.
+   Modified to be the effective priority for priority donation.. */
 int
 thread_get_priority (void)
 {
@@ -661,6 +665,8 @@ allocate_tid (void)
    Used by switch.S, which can't figure it out on its own. */
 uint32_t thread_stack_ofs = offsetof (struct thread, stack);
 
+/* Returns the struct thread of the thread with the highest effective priority
+  obtained by iterating through the read_list. */
 struct thread *get_highest_priority_thread_ready (void)
 {
   enum intr_level old_level = intr_disable ();
