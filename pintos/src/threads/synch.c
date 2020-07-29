@@ -233,8 +233,7 @@ void donate_priority (struct thread *t)
    This function may sleep, so it must not be called within an
    interrupt handler.  This function may be called with
    interrupts disabled, but interrupts will be turned back on if
-   we need to sleep.
-  */
+   we need to sleep. */
 void
 lock_acquire (struct lock *lock)
 {
@@ -303,8 +302,7 @@ int64_t get_effective_priority_lock (struct lock *lock)
 
    An interrupt handler cannot acquire a lock, so it does not
    make sense to try to release a lock within an interrupt
-   handler.
-*/
+   handler. */
 void
 lock_release (struct lock *lock)
 {
