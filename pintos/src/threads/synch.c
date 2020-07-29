@@ -296,8 +296,7 @@ int64_t get_effective_priority_lock (struct lock *lock)
    An interrupt handler cannot acquire a lock, so it does not
    make sense to try to release a lock within an interrupt
    handler.
-  lock->holder = NULL;
-  sema_up (&lock->semaphore);*/
+*/
 void
 lock_release (struct lock *lock)
 {
@@ -313,7 +312,6 @@ lock_release (struct lock *lock)
 
   struct list_elem* e;
 
-  //printf ("I have still have %d locks\n", list_size (&cur->o_locks));
   if (!list_empty (&cur->o_locks))
   {
     LIST_ITER (e, &cur->o_locks)
@@ -321,14 +319,11 @@ lock_release (struct lock *lock)
       my_new_priority = max (my_new_priority, get_effective_priority_lock (list_entry (e, struct lock, elem)));
     }
   }
-  //  printf ("no waitersfsdfs\n");
-  // printf ("My (%s) new parrot isd: %d\n", cur->name,  my_new_priority);
 
   cur->o_donated_priority = my_new_priority;
 
   if (!list_empty (&lock->o_waiter))
   {
-    //printf ("finding waiters\n");
     struct thread *t;
     LIST_MAX (t, get_effective_priority, &lock->o_waiter, e, struct thread, elem);
     list_remove (&t->elem);
@@ -339,14 +334,10 @@ lock_release (struct lock *lock)
       thread_yield();
     }
   }
-  else
-  {
-    //printf ("no waiters\n");
-  }
+
 
   intr_set_level (old_level);
-  //printf ("Lock_release welp!\n");
-    ASSERT (cur != NULL && cur->magic == 0xcd6abf4b);
+  ASSERT (cur != NULL && cur->magic == 0xcd6abf4b);
 }
 
 /* Returns true if the current thread holds LOCK, false
