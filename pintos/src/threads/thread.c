@@ -141,7 +141,7 @@ thread_tick (void)
   /* Wake up the thread that set the timer and add in yielding.
   Iterate over sleeping list to find which to wake up.
   We no longer include the enforce preemption (round robin) code.
-  Instead, we yield based on priority.  */
+  Instead, we yield (if necessary) based on priority.  */
 
   if (!list_empty (&sleeping_list))
   {
