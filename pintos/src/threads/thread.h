@@ -90,12 +90,12 @@ struct thread
     char name[16];                      /* Name (for debugging purposes). */
     uint8_t *stack;                     /* Saved stack pointer. */
     int priority;                       /* Priority. */
-    int o_donated_priority;
+    int o_donated_priority;             /* Donated priority. Used to calculate effective priority */
     struct list_elem allelem;           /* List element for all threads list. */
-    int64_t o_wake_tick;
+    int64_t o_wake_tick;                /* Time tick to wake up */
 
-    struct list o_locks;
-    struct lock *o_waiting_on_lock;
+    struct list o_locks;                /* List of locks this thread holds */
+    struct lock *o_waiting_on_lock;     /* Lock this thread is waiting on */
 
     /* Shared between thread.c and synch.c. */
     struct list_elem elem;              /* List element. */
@@ -146,14 +146,19 @@ void thread_set_nice (int);
 int thread_get_recent_cpu (void);
 int thread_get_load_avg (void);
 
+/* Our List iteration Macro */
 #define LIST_ITER(e, list) for (e = list_begin (list); e != list_end (list); e = list_next (e))
+
+/* Our thread struct Macro */
 #define ENTRY_THREAD_ELEM(e) list_entry (e, struct thread, elem)
 
+/* Our max Macro */
 #define max(a,b) \
    ({ __typeof__ (a) _a = (a); \
        __typeof__ (b) _b = (b); \
      _a > _b ? _a : _b; })
 
+/* Our LIST_MAX using function Macro */
 #define LIST_MAX(t, f, list, e, type, elem) \
   struct list_elem *e;\
   t = list_entry (list_begin (list), type, elem);\
@@ -162,6 +167,7 @@ int thread_get_load_avg (void);
     if ( f (list_entry (e, type, elem)) > f (t)) t = list_entry (e, type, elem);\
   }
 
+/* Our function to return effective priority of a thread by taking the max between donated and base priority. */
 inline int get_effective_priority (struct thread *t)
 {
   ASSERT (t != NULL);

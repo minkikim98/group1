@@ -138,9 +138,10 @@ thread_tick (void)
   else
     kernel_ticks++;
 
-  /* Enforce preemption. Not doing that. */
-  // if (++thread_ticks >= TIME_SLICE)
-  //   intr_yield_on_return ();
+  /* Wake up the thread that set the timer and add in yielding.
+  Iterate over sleeping list to find which to wake up.
+  We no longer include the enforce preemption (round robin) code.
+  Instead, we yield based on priority.  */
 
   if (!list_empty (&sleeping_list))
   {
@@ -394,7 +395,7 @@ thread_set_priority (int new_priority)
   enum intr_level old_level = intr_disable ();
 
   struct thread *cur = thread_current ();
-  
+
   cur->priority = new_priority;
   struct thread *my_high_ready = get_highest_priority_thread_ready ();
   if (my_high_ready)
@@ -531,7 +532,7 @@ init_thread (struct thread *t, const char *name, int priority)
   t->stack = (uint8_t *) t + PGSIZE;
   t->priority = priority;
   t->magic = THREAD_MAGIC;
-  
+
   t->o_donated_priority = PRI_MIN;
   t->o_wake_tick = 0;
   t->o_waiting_on_lock = NULL;
