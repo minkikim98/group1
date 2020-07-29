@@ -197,6 +197,15 @@ lock_init (struct lock *lock)
   sema_init (&lock->semaphore, 1);
 }
 
+/*  If a thread attempts to acquire a resource (lock) that is currently being held,
+it donates its effective priority to the holder of that resource.
+
+  This must be done recursively until a thread holding no locks is found,
+  even if the current thread has a lower priority than the current
+  resource holder.
+
+  Each thread’s effective priority becomes the max of all donated priorities
+  and its original priority.*/
 void donate_priority (struct thread *t)
 {
   barrier ();
@@ -335,7 +344,7 @@ lock_release (struct lock *lock)
   }
 
   intr_set_level (old_level);
-  ASSERT (cur != NULL && cur->magic == 0xcd6abf4b);
+  ASSERT (cur != NULL);
 }
 
 /* Returns true if the current thread holds LOCK, false
