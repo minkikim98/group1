@@ -245,7 +245,7 @@ lock_acquire (struct lock *lock)
     }
     list_push_front (&lock->o_waiter, &cur->elem);
     cur->o_waiting_on_lock = lock;
-    ASSERT (lock->holder != NULL && lock->holder->magic == 0xcd6abf4b);
+    ASSERT (lock->holder != NULL);
 
     donate_priority (cur);
     thread_block ();
