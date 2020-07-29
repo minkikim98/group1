@@ -111,7 +111,7 @@ sema_try_down (struct semaphore *sema)
    to find the highest priority (using our LIST_MAX macro) thread
    unblocks, and checks for yielding (not in interrupt context).
 
-   It's used by cond_signal as well. 
+   It's used by cond_signal as well.
     */
 void
 sema_up (struct semaphore *sema)
@@ -234,8 +234,6 @@ lock_acquire (struct lock *lock)
   ASSERT (!lock_held_by_current_thread (lock));
 
   struct thread *cur = thread_current ();
-  ASSERT (cur != NULL && cur->magic == 0xcd6abf4b);
-  ASSERT (cur != NULL && cur->magic == 0xcd6abf4b);
   enum intr_level old_level = intr_disable ();
 
   while (lock->holder)
@@ -258,7 +256,6 @@ lock_acquire (struct lock *lock)
   list_push_front (&cur->o_locks, &lock->elem);
 
   intr_set_level (old_level);
-    ASSERT (cur != NULL && cur->magic == 0xcd6abf4b);
 }
 
 /* Tries to acquires LOCK and returns true if successful or false
