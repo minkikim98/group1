@@ -82,6 +82,7 @@ typedef int tid_t;
    only because they are mutually exclusive: only a thread in the
    ready state is on the run queue, whereas only a thread in the
    blocked state is on a semaphore wait list. */
+
 struct thread
   {
     /* Owned by thread.c. */
@@ -90,12 +91,13 @@ struct thread
     char name[16];                      /* Name (for debugging purposes). */
     uint8_t *stack;                     /* Saved stack pointer. */
     int priority;                       /* Priority. */
-    int o_donated_priority;
     struct list_elem allelem;           /* List element for all threads list. */
-    int64_t o_wake_tick;
+    struct wait_status *o_wait_status;  /* Wait syscall status. */
 
-    struct list o_locks;
-    struct lock *o_waiting_on_lock;
+    /* Project 0 Task 3
+    */
+    struct file *file_descriptors[128];
+    struct file *current_process;
 
     /* Shared between thread.c and synch.c. */
     struct list_elem elem;              /* List element. */
@@ -103,11 +105,30 @@ struct thread
 #ifdef USERPROG
     /* Owned by userprog/process.c. */
     uint32_t *pagedir;                  /* Page directory. */
-#endif
 
+    /* Pintos list of this thread's children's wait statuses. */
+    struct list o_children_wait_status_list; 
+
+#endif
     /* Owned by thread.c. */
     unsigned magic;                     /* Detects stack overflow. */
   };
+
+struct wait_status {
+  tid_t o_tid;
+  struct semaphore o_sem_exited;
+  uint32_t o_exit_code;
+  uint32_t o_reference_count;
+  struct lock o_reference_count_lock;
+  struct list_elem wselem;
+  uint8_t o_kernel_killed;
+};
+
+// Helper function to modify reference count for our wait struct.
+void wait_status_mod_ref(struct wait_status* wait_status, int delta);
+
+struct wait_status *thread_get_wait_status(struct thread* t, tid_t tid);
+
 
 /* If false (default), use round-robin scheduler.
    If true, use multi-level feedback queue scheduler.
@@ -125,7 +146,6 @@ tid_t thread_create (const char *name, int priority, thread_func *, void *);
 
 void thread_block (void);
 void thread_unblock (struct thread *);
-void thread_sleep (void);
 
 struct thread *thread_current (void);
 tid_t thread_tid (void);
@@ -145,27 +165,5 @@ int thread_get_nice (void);
 void thread_set_nice (int);
 int thread_get_recent_cpu (void);
 int thread_get_load_avg (void);
-
-#define LIST_ITER(e, list) for (e = list_begin (list); e != list_end (list); e = list_next (e))
-#define ENTRY_THREAD_ELEM(e) list_entry (e, struct thread, elem)
-
-#define max(a,b) \
-   ({ __typeof__ (a) _a = (a); \
-       __typeof__ (b) _b = (b); \
-     _a > _b ? _a : _b; })
-
-#define LIST_MAX(t, f, list, e, type, elem) \
-  struct list_elem *e;\
-  t = list_entry (list_begin (list), type, elem);\
-  LIST_ITER (e, list)\
-  { \
-    if ( f (list_entry (e, type, elem)) > f (t)) t = list_entry (e, type, elem);\
-  }
-
-inline int get_effective_priority (struct thread *t)
-{
-  ASSERT (t != NULL);
-  return max(t->priority, t->o_donated_priority);
-}
 
 #endif /* threads/thread.h */
