@@ -23,6 +23,8 @@
 /* List of processes in THREAD_READY state, that is, processes
    that are ready to run but not actually running. */
 static struct list ready_list;
+
+/* List of processes that are sleeping - used for Task 1 by thread_tick(...). */
 static struct list sleeping_list;
 
 /* List of all processes.  Processes are added to this list
@@ -72,6 +74,7 @@ static void schedule (void);
 void thread_schedule_tail (struct thread *prev);
 static tid_t allocate_tid (void);
 
+/* Returns the thread struct of the highest priority thread that's ready*/
 static struct thread *get_highest_priority_thread_ready (void);
 
 /* Initializes the threading system by transforming the code
@@ -138,9 +141,10 @@ thread_tick (void)
   else
     kernel_ticks++;
 
-  /* Enforce preemption. Not doing that. */
-  // if (++thread_ticks >= TIME_SLICE)
-  //   intr_yield_on_return ();
+  /* Wake up the thread that set the timer and add in yielding.
+  Iterate over sleeping list to find which to wake up.
+  We no longer include the enforce preemption (round robin) code.
+  Instead, we yield (if necessary) based on priority.  */
 
   if (!list_empty (&sleeping_list))
   {
@@ -385,7 +389,8 @@ thread_foreach (thread_action_func *func, void *aux)
     }
 }
 
-/* Sets the current thread's priority to NEW_PRIORITY. */
+/* Sets the current thread's priority to NEW_PRIORITY.
+   This method needs to yield.  */
 void
 thread_set_priority (int new_priority)
 {
@@ -394,7 +399,7 @@ thread_set_priority (int new_priority)
   enum intr_level old_level = intr_disable ();
 
   struct thread *cur = thread_current ();
-  
+
   cur->priority = new_priority;
   struct thread *my_high_ready = get_highest_priority_thread_ready ();
   if (my_high_ready)
@@ -406,11 +411,12 @@ thread_set_priority (int new_priority)
   intr_set_level (old_level);
 }
 
-/* Returns the current thread's priority. */
+/* Returns the current thread's priority.
+   Modified to be the effective priority for priority donation.. */
 int
 thread_get_priority (void)
 {
-  return thread_current ()->priority;
+  return get_effective_priority (thread_current ());
 }
 
 /* Sets the current thread's nice value to NICE. */
@@ -531,7 +537,7 @@ init_thread (struct thread *t, const char *name, int priority)
   t->stack = (uint8_t *) t + PGSIZE;
   t->priority = priority;
   t->magic = THREAD_MAGIC;
-  
+
   t->o_donated_priority = PRI_MIN;
   t->o_wake_tick = 0;
   t->o_waiting_on_lock = NULL;
@@ -566,7 +572,11 @@ next_thread_to_run (void)
   if (list_empty (&ready_list))
     return idle_thread;
   else
-    return list_entry (list_pop_front (&ready_list), struct thread, elem);
+  {
+    struct thread * thread = get_highest_priority_thread_ready ();
+    list_remove (&thread->elem);
+    return thread;
+  }
 }
 
 /* Completes a thread switch by activating the new thread's page
@@ -656,6 +666,8 @@ allocate_tid (void)
    Used by switch.S, which can't figure it out on its own. */
 uint32_t thread_stack_ofs = offsetof (struct thread, stack);
 
+/* Returns the struct thread of the thread with the highest effective priority
+  obtained by iterating through the read_list. */
 struct thread *get_highest_priority_thread_ready (void)
 {
   enum intr_level old_level = intr_disable ();

@@ -85,14 +85,20 @@ timer_elapsed (int64_t then)
 }
 
 /* Sleeps for approximately TICKS timer ticks.  Interrupts must
-   be turned on. */
+   be turned on.
+   Edited for Task 1: Efficient Alarm Clock. */
 void
 timer_sleep (int64_t ticks)
 {
   int64_t start = timer_ticks ();
 
   ASSERT (intr_get_level () == INTR_ON);
-  
+
+  // In case timer_sleep is called in another manner than above with incorrect args (see spec)
+  if (ticks <= 0)
+    return;
+
+  // Set current thread o_wake_tick to time when the thread should be ready again.
   thread_current ()->o_wake_tick = ticks + start;
   thread_sleep ();
 }

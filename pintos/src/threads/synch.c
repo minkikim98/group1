@@ -104,18 +104,25 @@ sema_try_down (struct semaphore *sema)
 /* Up or "V" operation on a semaphore.  Increments SEMA's value
    and wakes up one thread of those waiting for SEMA, if any.
 
-   This function may be called from an interrupt handler. */
+   This function may be called from an interrupt handler.
+
+   Modified for Task 2. Must test for yield upon a sema_up.
+   Iterates on the list of threads waiting on the semaphore
+   to find the highest priority (using our LIST_MAX macro) thread
+   unblocks, and checks for yielding (not in interrupt context).
+
+   It's used by cond_signal as well.
+    */
 void
 sema_up (struct semaphore *sema)
 {
   enum intr_level old_level;
-
   ASSERT (sema != NULL);
 
   struct thread *cur = thread_current ();
   old_level = intr_disable ();
   sema->value++;
-  bool should_yield = false;
+
   if (!list_empty (&sema->waiters))
   {
     struct thread *t;
@@ -125,8 +132,6 @@ sema_up (struct semaphore *sema)
     if (get_effective_priority (t) > get_effective_priority (cur))
       thread_yield ();
   }
-    // thread_unblock (list_entry (list_pop_front (&sema->waiters),
-    //                             struct thread, elem));
   intr_set_level (old_level);
 }
 
@@ -192,6 +197,15 @@ lock_init (struct lock *lock)
   sema_init (&lock->semaphore, 1);
 }
 
+/*  If a thread attempts to acquire a resource (lock) that is currently being held,
+it donates its effective priority to the holder of that resource.
+
+  This must be done recursively until a thread holding no locks is found,
+  even if the current thread has a lower priority than the current
+  resource holder.
+
+  Each thread’s effective priority becomes the max of all donated priorities
+  and its original priority.*/
 void donate_priority (struct thread *t)
 {
   barrier ();
@@ -199,12 +213,16 @@ void donate_priority (struct thread *t)
   if (lock == NULL) return;
   else
   {
-    //printf ("lock location: %04x\n", lock);
-    enum intr_level old_level;
-    lock->holder->o_donated_priority = 
-    max (lock->holder->o_donated_priority, get_effective_priority (t));
-    donate_priority (lock->holder);
-    //printf ("priority donating\n");
+    if (lock->holder == NULL)
+    {
+      return;
+    }
+    if (lock->holder->o_donated_priority < get_effective_priority (t))
+    {
+      lock->holder->o_donated_priority =
+        max (lock->holder->o_donated_priority, get_effective_priority (t));
+      donate_priority (lock->holder);
+    }
   }
 }
 
@@ -215,9 +233,7 @@ void donate_priority (struct thread *t)
    This function may sleep, so it must not be called within an
    interrupt handler.  This function may be called with
    interrupts disabled, but interrupts will be turned back on if
-   we need to sleep. 
-  sema_down (&lock->semaphore);
-  lock->holder = thread_current ();*/
+   we need to sleep. */
 void
 lock_acquire (struct lock *lock)
 {
@@ -226,12 +242,19 @@ lock_acquire (struct lock *lock)
   ASSERT (!lock_held_by_current_thread (lock));
 
   struct thread *cur = thread_current ();
-
   enum intr_level old_level = intr_disable ();
+
   while (lock->holder)
   {
+    struct list_elem *e;
+    LIST_ITER (e, &lock->o_waiter)
+    {
+      ASSERT (list_entry (e, struct thread, elem) != cur);
+    }
     list_push_front (&lock->o_waiter, &cur->elem);
     cur->o_waiting_on_lock = lock;
+    ASSERT (lock->holder != NULL);
+
     donate_priority (cur);
     thread_block ();
   }
@@ -263,10 +286,12 @@ lock_try_acquire (struct lock *lock)
   return success;
 }
 
+/* Our function to calculate max effective priority out of any one waiting on this lock. */
 int64_t get_effective_priority_lock (struct lock *lock)
 {
   int64_t p = -1;
-  for (struct list_elem *e = list_begin (&lock->o_waiter); e != list_end (&lock->o_waiter); e = list_next (e))
+  struct list_elem *e;
+  LIST_ITER(e, &lock->o_waiter)
   {
     p = max (p, get_effective_priority (list_entry (e, struct thread, elem)));
   }
@@ -277,25 +302,19 @@ int64_t get_effective_priority_lock (struct lock *lock)
 
    An interrupt handler cannot acquire a lock, so it does not
    make sense to try to release a lock within an interrupt
-   handler. 
-  lock->holder = NULL;
-  sema_up (&lock->semaphore);*/
+   handler. */
 void
 lock_release (struct lock *lock)
 {
   ASSERT (lock != NULL);
   ASSERT (lock_held_by_current_thread (lock));
-
   struct thread *cur = thread_current ();
-
   enum intr_level old_level = intr_disable ();
-  
+
   lock->holder = NULL;
   int64_t my_new_priority = -1;
 
   list_remove (&lock->elem);
-
-  // 
 
   struct list_elem* e;
 
@@ -306,14 +325,11 @@ lock_release (struct lock *lock)
       my_new_priority = max (my_new_priority, get_effective_priority_lock (list_entry (e, struct lock, elem)));
     }
   }
-  //  printf ("no waitersfsdfs\n");
-  // printf ("My (%s) new parrot isd: %d\n", cur->name,  my_new_priority);
 
   cur->o_donated_priority = my_new_priority;
 
   if (!list_empty (&lock->o_waiter))
   {
-    // printf ("finding waiters\n");
     struct thread *t;
     LIST_MAX (t, get_effective_priority, &lock->o_waiter, e, struct thread, elem);
     list_remove (&t->elem);
@@ -324,13 +340,9 @@ lock_release (struct lock *lock)
       thread_yield();
     }
   }
-  else
-  {
-    
-    //printf ("no waiters\n");
-  }
-  
+
   intr_set_level (old_level);
+  ASSERT (cur != NULL);
 }
 
 /* Returns true if the current thread holds LOCK, false
@@ -405,7 +417,9 @@ cond_wait (struct condition *cond, struct lock *lock)
 
    An interrupt handler cannot acquire a lock, so it does not
    make sense to try to signal a condition variable within an
-   interrupt handler. */
+   interrupt handler.
+
+   Modified for Task 2. It will yield in the sema_up call.  */
 void
 cond_signal (struct condition *cond, struct lock *lock UNUSED)
 {
