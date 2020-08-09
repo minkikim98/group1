@@ -382,7 +382,6 @@ inode_close (struct inode *inode)
     lock_init (&ll);
   }
   /* Ignore null pointer. */
-  //printf ("Closing inode: %04x\n", inode);
   if (inode == NULL)
   {
   //lock_release (&ll);
@@ -602,8 +601,10 @@ void
 inode_deny_write (struct inode *inode)
 {
   ASSERT (inode);
+  lock (inode);
   inode->deny_write_cnt++;
   ASSERT (inode->deny_write_cnt <= inode->open_cnt);
+  rel (inode);
 }
 
 /* Re-enables writes to INODE.
@@ -615,7 +616,9 @@ inode_allow_write (struct inode *inode)
   ASSERT (inode);
   ASSERT (inode->deny_write_cnt > 0);
   ASSERT (inode->deny_write_cnt <= inode->open_cnt);
+  lock (inode);
   inode->deny_write_cnt--;
+  rel (inode);
 }
 
 /* Returns the length, in bytes, of INODE's data. */
