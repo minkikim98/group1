@@ -10,12 +10,12 @@ static struct file *free_map_file;   /* Free map file. */
 static struct bitmap *free_map;      /* Free map, one bit per sector. */
 static struct lock da_lock;
 
-static void lock ()
+static void lock (void)
 {
   lock_acquire (&da_lock);
 }
 
-static void rel ()
+static void rel (void)
 {
   lock_release (&da_lock);
 }
@@ -59,8 +59,8 @@ free_map_allocate (size_t cnt, block_sector_t *sectorp)
 void
 free_map_release (block_sector_t sector, size_t cnt)
 {
-  lock();
   ASSERT (bitmap_all (free_map, sector, cnt));
+  lock();
   bitmap_set_multiple (free_map, sector, cnt, false);
   bitmap_write (free_map, free_map_file);
   rel ();
@@ -70,7 +70,6 @@ free_map_release (block_sector_t sector, size_t cnt)
 void
 free_map_open (void)
 {
-  lock();
   free_map_file = file_open (inode_open (FREE_MAP_SECTOR));
   if (free_map_file == NULL)
   {
@@ -80,16 +79,13 @@ free_map_open (void)
   {
     PANIC ("can't read free map");
   }
-  rel ();
 }
 
 /* Writes the free map to disk and closes the free map file. */
 void
 free_map_close (void)
 {
-  lock();
   file_close (free_map_file);
-  rel ();
 }
 
 /* Creates a new free map file on disk and writes the free map to
@@ -97,7 +93,6 @@ free_map_close (void)
 void
 free_map_create (void)
 {
-  lock();
   /* Create inode. */
   if (!inode_create (FREE_MAP_SECTOR, bitmap_file_size (free_map)))
   {
@@ -114,5 +109,4 @@ free_map_create (void)
   {
     PANIC ("can't write free map");
   }
-  rel ();
 }

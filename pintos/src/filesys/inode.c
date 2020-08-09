@@ -7,6 +7,7 @@
 #include "filesys/free-map.h"
 #include "threads/malloc.h"
 #include "threads/synch.h"
+#include "threads/interrupt.h"
 
 /* Identifies an inode. */
 #define INODE_MAGIC 0x494e4f44
@@ -216,11 +217,13 @@ byte_to_sector (const struct inode *inode, off_t pos)
    returns the same `struct inode'. */
 static struct list open_inodes;
 
+struct lock open_lock;
 /* Initializes the inode module. */
 void
 inode_init (void)
 {
   list_init (&open_inodes);
+  lock_init (&open_lock);
 }
 
 /* Initializes an inode with LENGTH bytes of data and
@@ -275,6 +278,7 @@ inode_open (block_sector_t sector)
   struct inode *inode;
 
   /* Check whether this inode is already open. */
+  lock_acquire (&open_lock);
   for (e = list_begin (&open_inodes); e != list_end (&open_inodes);
        e = list_next (e))
     {
@@ -282,6 +286,7 @@ inode_open (block_sector_t sector)
       if (inode->sector == sector)
         {
           inode_reopen (inode);
+          lock_release (&open_lock);
           return inode;
         }
     }
@@ -289,10 +294,14 @@ inode_open (block_sector_t sector)
   /* Allocate memory. */
   inode = malloc (sizeof *inode);
   if (inode == NULL)
+  {
+    lock_release (&open_lock);
     return NULL;
+  }
 
   /* Initialize. */
   list_push_front (&open_inodes, &inode->elem);
+  lock_release (&open_lock);
   inode->sector = sector;
   inode->open_cnt = 1;
   inode->deny_write_cnt = 0;
@@ -317,8 +326,8 @@ inode_reopen (struct inode *inode)
 block_sector_t
 inode_get_inumber (const struct inode *inode)
 {
-  block_sector_t mabel = inode->sector;
   lock (inode);
+  block_sector_t mabel = inode->sector;
   mabel = inode->sector;
   rel (inode);
   return mabel;
@@ -333,8 +342,11 @@ inode_close (struct inode *inode)
   lock (inode);
   /* Ignore null pointer. */
   if (inode == NULL)
+  {
+    rel (inode);
     return;
-
+  }
+  bool should_free = false;
   /* Release resources if this was the last opener. */
   if (--inode->open_cnt == 0)
     {
@@ -344,37 +356,39 @@ inode_close (struct inode *inode)
       /* Deallocate blocks if removed. */
       if (inode->removed)
         {
-          // free_map_release (inode->sector, 1);
+          free_map_release (inode->sector, 1);
           // free_map_release (inode->data.start,
           //                   bytes_to_sectors (inode->data.length));
-          // for (int i = 0; i < NUM_DIRECT_PTRS; i ++)
-          // {
-          //   free_map_release (inode->data.direct_ptrs[i], i);
-          // }
-          // bool clear_data (block_sector_t sector, int level)
-          // {
-          //   if (sector == 0){return true;}
-          //   if (level == 0){ ASSERT (false);}
-          //   if (level == 1)
-          //   {
-          //     free_map_release (sector, 1);
-          //     return false;
-          //   }
-          //   for (int i = 0; i < BLOCK_SECTOR_SIZE / 4; i ++)
-          //   {
-          //     if (clear_data (read_sector (sector, i), level - 1))
-          //     {
-          //       return true;
-          //     }
-          //   }
-          //   return false;
-          // }
-          // clear_data (inode->data.single_ptr, 2);
-          // clear_data (inode->data.double_ptr, 3);
+          for (int i = 0; i < NUM_DIRECT_PTRS; i ++)
+          {
+            free_map_release (inode->data.direct_ptrs[i], i);
+          }
+          bool clear_data (block_sector_t sector, int level)
+          {
+            if (sector == 0){return true;}
+            if (level == 0){ ASSERT (false);}
+            if (level == 1)
+            {
+              free_map_release (sector, 1);
+              return false;
+            }
+            for (int i = 0; i < BLOCK_SECTOR_SIZE / 4; i ++)
+            {
+              if (clear_data (read_sector (sector, i), level - 1))
+              {
+                return true;
+              }
+            }
+            return false;
+          }
+          clear_data (inode->data.single_ptr, 2);
+          clear_data (inode->data.double_ptr, 3);
         }
-      rel (inode);
-      free (inode);
+      should_free = true;
     }
+  rel (inode);
+  if (should_free)
+    free (inode);
 }
 
 /* Marks INODE to be deleted when it is closed by the last caller who
@@ -460,7 +474,10 @@ inode_write_at (struct inode *inode, const void *buffer_, off_t size,
   uint8_t *bounce = NULL;
   inode_extend_to_bytes (&inode->data, offset+size);
   if (inode->deny_write_cnt)
+  {
+    rel (inode);
     return 0;
+  }
 
   while (size > 0)
     {
