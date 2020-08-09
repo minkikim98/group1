@@ -255,6 +255,16 @@ inode_create (block_sector_t sector, off_t length)
   return success;
 }
 
+static void lock (struct inode *inode)
+{
+  //lock_acquire (&inode->inode_lock);
+}
+
+static void rel (struct inode *inode)
+{
+  //lock_release (&inode->inode_lock);
+}
+
 /* Reads an inode from SECTOR
    and returns a `struct inode' that contains it.
    Returns a null pointer if memory allocation fails. */
@@ -296,10 +306,10 @@ inode_open (block_sector_t sector)
 struct inode *
 inode_reopen (struct inode *inode)
 {
-  lock_acquire (&inode->inode_lock);
+  lock (inode);
   if (inode != NULL)
     inode->open_cnt++;
-  lock_release (&inode->inode_lock);
+  rel (inode);
   return inode;
 }
 
@@ -307,7 +317,11 @@ inode_reopen (struct inode *inode)
 block_sector_t
 inode_get_inumber (const struct inode *inode)
 {
-  return inode->sector;
+  block_sector_t mabel = inode->sector;
+  lock (inode);
+  mabel = inode->sector;
+  rel (inode);
+  return mabel;
 }
 
 /* Closes INODE and writes it to disk.
@@ -316,6 +330,7 @@ inode_get_inumber (const struct inode *inode)
 void
 inode_close (struct inode *inode)
 {
+  lock (inode);
   /* Ignore null pointer. */
   if (inode == NULL)
     return;
@@ -332,34 +347,35 @@ inode_close (struct inode *inode)
           // free_map_release (inode->sector, 1);
           // free_map_release (inode->data.start,
           //                   bytes_to_sectors (inode->data.length));
-          for (int i = 0; i < NUM_DIRECT_PTRS; i ++)
-          {
-            free_map_release (inode->data.direct_ptrs[i], i);
-          }
-          bool clear_data (block_sector_t sector, int level)
-          {
-            if (sector == 0){return true;}
-            if (level == 0){ ASSERT (false);}
-            if (level == 1)
-            {
-              free_map_release (sector, 1);
-              return false;
-            }
-            for (int i = 0; i < BLOCK_SECTOR_SIZE / 4; i ++)
-            {
-              if (clear_data (read_sector (sector, i), level - 1))
-              {
-                return true;
-              }
-            }
-            return false;
-          }
-          clear_data (inode->data.single_ptr, 2);
-          clear_data (inode->data.double_ptr, 3);
+          // for (int i = 0; i < NUM_DIRECT_PTRS; i ++)
+          // {
+          //   free_map_release (inode->data.direct_ptrs[i], i);
+          // }
+          // bool clear_data (block_sector_t sector, int level)
+          // {
+          //   if (sector == 0){return true;}
+          //   if (level == 0){ ASSERT (false);}
+          //   if (level == 1)
+          //   {
+          //     free_map_release (sector, 1);
+          //     return false;
+          //   }
+          //   for (int i = 0; i < BLOCK_SECTOR_SIZE / 4; i ++)
+          //   {
+          //     if (clear_data (read_sector (sector, i), level - 1))
+          //     {
+          //       return true;
+          //     }
+          //   }
+          //   return false;
+          // }
+          // clear_data (inode->data.single_ptr, 2);
+          // clear_data (inode->data.double_ptr, 3);
         }
 
       free (inode);
     }
+  rel (inode);
 }
 
 /* Marks INODE to be deleted when it is closed by the last caller who
@@ -367,8 +383,10 @@ inode_close (struct inode *inode)
 void
 inode_remove (struct inode *inode)
 {
+  lock (inode);
   ASSERT (inode != NULL);
   inode->removed = true;
+  rel (inode);
 }
 
 /* Reads SIZE bytes from INODE into BUFFER, starting at position OFFSET.
@@ -377,7 +395,7 @@ inode_remove (struct inode *inode)
 off_t
 inode_read_at (struct inode *inode, void *buffer_, off_t size, off_t offset)
 {
-  lock_acquire (&inode->inode_lock);
+  lock (inode);
   uint8_t *buffer = buffer_;
   off_t bytes_read = 0;
   uint8_t *bounce = NULL;
@@ -423,7 +441,7 @@ inode_read_at (struct inode *inode, void *buffer_, off_t size, off_t offset)
       bytes_read += chunk_size;
     }
   free (bounce);
-  lock_release (&inode->inode_lock);
+  rel (inode);
 
   return bytes_read;
 }
@@ -437,7 +455,7 @@ off_t
 inode_write_at (struct inode *inode, const void *buffer_, off_t size,
                 off_t offset)
 {
-  lock_acquire (&inode->inode_lock);
+  lock (inode);
   const uint8_t *buffer = buffer_;
   off_t bytes_written = 0;
   uint8_t *bounce = NULL;
@@ -493,7 +511,7 @@ inode_write_at (struct inode *inode, const void *buffer_, off_t size,
       bytes_written += chunk_size;
     }
   free (bounce);
-  lock_release (&inode->inode_lock);
+  rel (inode);
 
   return bytes_written;
 }
