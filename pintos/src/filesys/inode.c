@@ -357,10 +357,10 @@ inode_close (struct inode *inode)
     return;
   }
   lock_acquire (&ll);
-  lock (inode);
+  //lock (inode);
+  lock_acquire (&inode->inode_lock);
   bool should_free = false;
   /* Release resources if this was the last opener. */
-  //printf ("Closing inode: %04x, open: %d\n", inode, inode->open_cnt);
   if (--inode->open_cnt == 0)
   {
     //printf ("Inode coutn is zero: %04x\n", inode);
@@ -376,7 +376,8 @@ inode_close (struct inode *inode)
       //                   bytes_to_sectors (inode->data.length));
       for (int i = 0; i < NUM_DIRECT_PTRS; i ++)
       {
-        free_map_release (inode->data.direct_ptrs[i], i);
+        if (inode->data.direct_ptrs[i] == 0) break;
+        free_map_release (inode->data.direct_ptrs[i], 1);
       }
       bool clear_data (block_sector_t sector, int level)
       {
@@ -406,16 +407,14 @@ inode_close (struct inode *inode)
   }
   //printf ("after inode: %04x, open: %d\n", inode, inode->open_cnt);
   //printf ("b4 locking\n");
-  struct lock lll = inode->inode_lock;
+  //rel (inode);
+  //printf ("exiting critical sectoni\n");
+  lock_release (&inode->inode_lock);
   if (should_free)
   {
-    //printf ("Freeing %04x, cout: %d\n", inode, inode->open_cnt);
-    rel (inode);
+    //printf ("Freeing %04x\n", inode);
     free (inode);
     //printf ("Freed %04x\n", inode);
-  }else
-  {
-    rel (inode);
   }
   //printf ("after locking\n");
   lock_release (&ll);
@@ -438,6 +437,7 @@ inode_remove (struct inode *inode)
 off_t
 inode_read_at (struct inode *inode, void *buffer_, off_t size, off_t offset)
 {
+  ASSERT (inode);
   lock (inode);
   uint8_t *buffer = buffer_;
   off_t bytes_read = 0;
@@ -498,6 +498,7 @@ off_t
 inode_write_at (struct inode *inode, const void *buffer_, off_t size,
                 off_t offset)
 {
+  ASSERT (inode);
   lock (inode);
   const uint8_t *buffer = buffer_;
   off_t bytes_written = 0;
@@ -567,6 +568,7 @@ inode_write_at (struct inode *inode, const void *buffer_, off_t size,
 void
 inode_deny_write (struct inode *inode)
 {
+  ASSERT (inode);
   inode->deny_write_cnt++;
   ASSERT (inode->deny_write_cnt <= inode->open_cnt);
 }
@@ -577,6 +579,7 @@ inode_deny_write (struct inode *inode)
 void
 inode_allow_write (struct inode *inode)
 {
+  ASSERT (inode);
   ASSERT (inode->deny_write_cnt > 0);
   ASSERT (inode->deny_write_cnt <= inode->open_cnt);
   inode->deny_write_cnt--;
@@ -586,5 +589,6 @@ inode_allow_write (struct inode *inode)
 off_t
 inode_length (const struct inode *inode)
 {
+  ASSERT (inode);
   return inode->data.length;
 }
