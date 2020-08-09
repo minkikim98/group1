@@ -339,65 +339,79 @@ inode_get_inumber (const struct inode *inode)
 /* Closes INODE and writes it to disk.
    If this was the last reference to INODE, frees its memory.
    If INODE was also a removed inode, frees its blocks. */
+struct lock ll;
+bool first = true;
 void
 inode_close (struct inode *inode)
 {
+  if (first)
+  {
+    first = false;
+    lock_init (&ll);
+  }
   /* Ignore null pointer. */
   //printf ("Closing inode: %04x\n", inode);
   if (inode == NULL)
   {
+  //lock_release (&ll);
     return;
   }
+  //lock_acquire (&ll);
   lock (inode);
   bool should_free = false;
   /* Release resources if this was the last opener. */
   if (--inode->open_cnt == 0)
-    {
-      //printf ("Inode coutn is zero: %04x\n", inode);
-      /* Remove from inode list and release lock. */
-      list_remove (&inode->elem);
+  {
+    //printf ("Inode coutn is zero: %04x\n", inode);
+    /* Remove from inode list and release lock. */
+    list_remove (&inode->elem);
 
-      /* Deallocate blocks if removed. */
-      if (inode->removed)
+    /* Deallocate blocks if removed. */
+    if (inode->removed)
+    {
+      //printf ("I shall close inode: %04x\n", inode);
+      free_map_release (inode->sector, 1);
+      // free_map_release (inode->data.start,
+      //                   bytes_to_sectors (inode->data.length));
+      for (int i = 0; i < NUM_DIRECT_PTRS; i ++)
+      {
+        free_map_release (inode->data.direct_ptrs[i], i);
+      }
+      bool clear_data (block_sector_t sector, int level)
+      {
+        if (sector == 0){return true;}
+        if (level == 0){ ASSERT (false);}
+        if (level == 1)
         {
-          //printf ("I shall close inode: %04x\n", inode);
-          free_map_release (inode->sector, 1);
-          // free_map_release (inode->data.start,
-          //                   bytes_to_sectors (inode->data.length));
-          for (int i = 0; i < NUM_DIRECT_PTRS; i ++)
-          {
-            free_map_release (inode->data.direct_ptrs[i], i);
-          }
-          bool clear_data (block_sector_t sector, int level)
-          {
-            if (sector == 0){return true;}
-            if (level == 0){ ASSERT (false);}
-            if (level == 1)
-            {
-              free_map_release (sector, 1);
-              return false;
-            }
-            for (int i = 0; i < BLOCK_SECTOR_SIZE / 4; i ++)
-            {
-              if (clear_data (read_sector (sector, i), level - 1))
-              {
-                return true;
-              }
-            }
-            return false;
-          }
-          clear_data (inode->data.single_ptr, 2);
-          clear_data (inode->data.double_ptr, 3);
-          should_free = true;
+          free_map_release (sector, 1);
+          return false;
         }
+        for (int i = 0; i < BLOCK_SECTOR_SIZE / 4; i ++)
+        {
+          if (clear_data (read_sector (sector, i), level - 1))
+          {
+            return true;
+          }
+        }
+        return false;
+      }
+      clear_data (inode->data.single_ptr, 2);
+      clear_data (inode->data.double_ptr, 3);
     }
+    should_free = true;
+    // struct lock lock = inode->inode_lock;
+    // //free (inode);
+    // lock_release (&lock);
+  }
   //printf ("b4 locking\n");
   rel (inode);
   //printf ("after locking\n");
   if (should_free)
   {
+    //printf ("Freeing %04x\n", inode);
     free (inode);
   }
+  //lock_release (&ll);
 }
 
 /* Marks INODE to be deleted when it is closed by the last caller who
