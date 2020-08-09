@@ -11,7 +11,7 @@
 /* Identifies an inode. */
 #define INODE_MAGIC 0x494e4f44
 
-#define NUM_DIRECT_PTRS 12
+#define NUM_DIRECT_PTRS 0
 
 /* On-disk inode.
    Must be exactly BLOCK_SECTOR_SIZE bytes long. */
@@ -30,12 +30,20 @@ struct inode_disk
     uint32_t unused[123 - NUM_DIRECT_PTRS];
   };
 
+uint8_t zero_block[BLOCK_SECTOR_SIZE] = {0};
+
 /* Returns the number of sectors to allocate for an inode SIZE
    bytes long. */
 static inline size_t
 bytes_to_sectors (off_t size)
 {
   return DIV_ROUND_UP (size, BLOCK_SECTOR_SIZE);
+}
+
+static inline size_t
+bytes_to_sector_index (off_t offest)
+{
+  return offest / BLOCK_SECTOR_SIZE;
 }
 
 /* In-memory inode. */
@@ -56,25 +64,154 @@ struct inode
 
 static bool inode_extend (struct inode_disk *disk_inode, size_t sectors)
 {
-  
+  return true;
 }
 
+static bool get_sector (block_sector_t *sector)
+{
+  bool b = free_map_allocate (1, sector);
+  if (!b) return false;
+  block_write (fs_device, *sector, zero_block);
+  return true;
+}
+
+static bool can_allocate (size_t num)
+{
+  block_sector_t sectors[num];
+  for (int i = 0; i < num; i++)
+  {
+    if (!get_sector (&sectors[i]))
+    {
+      for (int j = i - 1; j > 0; j --)
+      {
+        free_map_release (sectors[j], 1);
+      }
+      return false;
+    }
+  }
+  for (int j = num - 1; j > 0; j --)
+  {
+    free_map_release (sectors[j], 1);
+  }
+  return true;
+}
+
+block_sector_t read_sector (block_sector_t sector, int index);
+block_sector_t read_sector (block_sector_t sector, int index)
+{
+  ASSERT (sector);
+  uint8_t buffer[BLOCK_SECTOR_SIZE];
+  block_read (fs_device, sector, buffer);
+  return ((block_sector_t*) buffer)[index];
+}
+
+void write_sector (block_sector_t sector, int index, block_sector_t good_stuff);
+void write_sector (block_sector_t sector, int index, block_sector_t good_stuff)
+{
+  ASSERT (sector);
+  uint8_t buffer[BLOCK_SECTOR_SIZE];
+  block_read (fs_device, sector, buffer);
+  ASSERT (((block_sector_t*) buffer)[index] == 0);
+  ((block_sector_t*) buffer)[index] = good_stuff;
+  block_write (fs_device, sector, buffer);
+}
+
+#define Indirect_Block (BLOCK_SECTOR_SIZE / 4)
+
+// block_sector_t get_single (block_sector_t index){
+//   return (index - NUM_DIRECT_PTRS) / (BLOCK_SECTOR_SIZE / 4);
+// }
+block_sector_t we;
+int written_to = 0;
+void install_sector (struct inode_disk *disk_inode, int i);
+void install_sector (struct inode_disk *disk_inode, int i)
+{
+  ASSERT (i < NUM_DIRECT_PTRS + BLOCK_SECTOR_SIZE / 4 * (1 + BLOCK_SECTOR_SIZE / 4));
+  block_sector_t sec;
+  ASSERT (get_sector (&sec));
+  block_write (fs_device, sec, zero_block);
+  if (i < NUM_DIRECT_PTRS)
+  {
+    disk_inode->direct_ptrs[i] = sec;
+  }
+  else if (i < NUM_DIRECT_PTRS + BLOCK_SECTOR_SIZE / 4)
+  {
+    if (disk_inode->single_ptr == 0)
+    {
+      ASSERT (get_sector (&disk_inode->single_ptr));
+    }
+    write_sector (disk_inode->single_ptr, i - NUM_DIRECT_PTRS, sec);
+  }
+  else
+  {
+    if (disk_inode->double_ptr == 0)
+    {
+      ASSERT (get_sector (&disk_inode->double_ptr));
+    }
+    int dab = i - NUM_DIRECT_PTRS - Indirect_Block;
+    ASSERT (dab >= 0);
+    block_sector_t ind_sec = read_sector (disk_inode->double_ptr, dab / Indirect_Block);
+    if (ind_sec == 0)
+    {
+      ASSERT (get_sector (&ind_sec));
+      write_sector (disk_inode->double_ptr, dab / Indirect_Block, ind_sec);
+    }
+    
+    //int double_dab = dab % Indirect_Block;
+    //ASSERT ("Maple" == NULL);
+    write_sector (ind_sec, dab % Indirect_Block, sec);
+    // block_sector_t double_sec = read_sector (ind_sec, dab % Indirect_Block);
+    // if (double_sec == 0)
+    // {
+    //   ASSERT (get_sector (&double_sec));
+    //   write_sector (ind_sec, dab % Indirect_Block, double_sec);
+    //   //ASSERT ("Maple" == NULL);
+    // }
+    // write_sector (double_sec, dab % Indirect_Block, sec);
+    if (dab == 0)
+    {
+      written_to ++;
+      we = sec;
+      
+      block_sector_t sec_mabel = read_sector (disk_inode->double_ptr, dab / Indirect_Block);
+      ASSERT (sec_mabel);
+      ASSERT (sec_mabel == ind_sec);
+      block_sector_t thd_mabel = read_sector (sec_mabel, dab % Indirect_Block);
+      ASSERT (thd_mabel == sec);
+    }
+  }
+}
+
+#define OUR
+
+int l = 0;
 static bool inode_extend_start (struct inode_disk *disk_inode, int sector, size_t sectors)
 {
+#ifndef OUR
   if (free_map_allocate (sectors, &disk_inode->direct_ptrs[0]))
   {
     block_write (fs_device, sector, disk_inode);
     if (sectors > 0)
-    {
-      static char zeros[BLOCK_SECTOR_SIZE];
-      size_t i;
+      {
+        static char zeros[BLOCK_SECTOR_SIZE];
+        size_t i;
 
-      for (i = 0; i < sectors; i++)
-        block_write (fs_device, disk_inode->direct_ptrs[0] + i, zeros);
-    }
+        for (i = 0; i < sectors; i++)
+          block_write (fs_device, disk_inode->direct_ptrs[0] + i, zeros);
+      }
     return true;
   }
   return false;
+#else
+  //printf ("I want this many sectors: %d\n", sectors);
+
+  for (size_t i = 0; i < sectors; i++)
+  {
+    install_sector (disk_inode, i);
+  }
+  block_write (fs_device, sector, disk_inode);
+  return true;
+#endif
 }
 
 /* Returns the block device sector that contains byte offset POS
@@ -84,11 +221,49 @@ static bool inode_extend_start (struct inode_disk *disk_inode, int sector, size_
 static block_sector_t
 byte_to_sector (const struct inode *inode, off_t pos)
 {
+#ifndef OUR
   ASSERT (inode != NULL);
   if (pos < inode->data.length)
     return inode->data.direct_ptrs[0] + pos / BLOCK_SECTOR_SIZE;
   else
+  {
+    //ASSERT ("I am depressed\n" == NULL);
     return -1;
+  }
+#else
+  ASSERT (inode != NULL);
+  int i = bytes_to_sector_index (pos);
+  ASSERT (i < NUM_DIRECT_PTRS + BLOCK_SECTOR_SIZE / 4 * (1 + BLOCK_SECTOR_SIZE / 4));
+  if (pos >= inode->data.length) return -1;
+  ASSERT (pos < inode->data.length);
+  block_sector_t sector;
+  if (i < NUM_DIRECT_PTRS)
+  {
+    sector = inode->data.direct_ptrs[i];
+  }
+  else if (i < NUM_DIRECT_PTRS + Indirect_Block)
+  {
+    ASSERT (inode->data.single_ptr);
+    sector = read_sector (inode->data.single_ptr, i - NUM_DIRECT_PTRS);
+  }
+  else
+  {
+    //ASSERT ("Mabel" == "Maple Syrup");
+    ASSERT (inode->data.double_ptr);
+    block_sector_t dab = i - NUM_DIRECT_PTRS - Indirect_Block;
+    ASSERT (dab >= 0);
+    block_sector_t sec_mabel = read_sector (inode->data.double_ptr, dab / Indirect_Block);
+    ASSERT (sec_mabel);
+    sector = read_sector (sec_mabel, dab % Indirect_Block);
+    if (dab == 0)
+    {
+      ASSERT (written_to == 1);
+      ASSERT (sector == we);
+    }
+  }
+  ASSERT (sector);
+  return sector;
+#endif
 }
 
 /* List of open inodes, so that opening a single inode twice
@@ -121,13 +296,18 @@ inode_create (block_sector_t sector, off_t length)
 
   disk_inode = calloc (1, sizeof *disk_inode);
   if (disk_inode != NULL)
+  {
+    size_t sectors = bytes_to_sectors (length);
+    disk_inode->length = length;
+    disk_inode->magic = INODE_MAGIC;
+    ASSERT (length < 8000000);
+    if (!can_allocate (length / BLOCK_SECTOR_SIZE))
     {
-      size_t sectors = bytes_to_sectors (length);
-      disk_inode->length = length;
-      disk_inode->magic = INODE_MAGIC;
-      success = inode_extend_start (disk_inode, sector, sectors);
-      free (disk_inode);
+      return false;
     }
+    success = inode_extend_start (disk_inode, sector, sectors);
+    //free (disk_inode);
+  }
   return success;
 }
 
@@ -205,6 +385,30 @@ inode_close (struct inode *inode)
           // free_map_release (inode->sector, 1);
           // free_map_release (inode->data.start,
           //                   bytes_to_sectors (inode->data.length));
+          for (int i = 0; i < NUM_DIRECT_PTRS; i ++)
+          {
+            free_map_release (inode->data.direct_ptrs[i], i);
+          }
+          bool clear_data (block_sector_t sector, int level)
+          {
+            if (sector == 0){return true;}
+            if (level == 0){ ASSERT (false);}
+            if (level == 1)
+            {
+              free_map_release (sector, 1);
+              return false;
+            }
+            for (int i = 0; i < BLOCK_SECTOR_SIZE / 4; i ++)
+            {
+              if (clear_data (read_sector (sector, i), level - 1))
+              {
+                return true;
+              }
+            }
+            return false;
+          }
+          clear_data (inode->data.single_ptr, 2);
+          clear_data (inode->data.double_ptr, 3);
         }
 
       free (inode);
