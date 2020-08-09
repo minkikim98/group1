@@ -291,10 +291,12 @@ inode_create (block_sector_t sector, off_t length)
 static void lock (struct inode *inode)
 {
   lock_acquire (&inode->inode_lock);
+  //printf ("%04x, acuire holder: %04x, count: %d\n", inode, inode->inode_lock.holder, inode->open_cnt);
 }
 
 static void rel (struct inode *inode)
 {
+  //printf ("%04x, relesa holder: %04x, count: %d\n", inode, inode->inode_lock.holder, inode->open_cnt);
   lock_release (&inode->inode_lock);
 }
 
@@ -316,8 +318,8 @@ inode_open (block_sector_t sector)
       inode = list_entry (e, struct inode, elem);
       if (inode->sector == sector)
         {
+          inode->open_cnt++;
           lock_release (&open_lock);
-          inode_reopen (inode);
           return inode;
         }
     }
@@ -386,7 +388,7 @@ inode_close (struct inode *inode)
   //lock_release (&ll);
     return;
   }
-  lock_acquire (&ll);
+  //lock_acquire (&ll);
   //lock (inode);
   lock_acquire (&inode->inode_lock);
   bool should_free = false;
@@ -442,13 +444,12 @@ inode_close (struct inode *inode)
   lock_release (&inode->inode_lock);
   if (should_free)
   {
-    //printf ("Freeing %04x\n", inode);
     block_write (fs_device, inode->sector, &inode->data);
     free (inode);
     //printf ("Freed %04x\n", inode);
   }
   //printf ("after locking\n");
-  lock_release (&ll);
+  //lock_release (&ll);
 }
 
 /* Marks INODE to be deleted when it is closed by the last caller who
@@ -473,7 +474,6 @@ inode_read_at (struct inode *inode, void *buffer_, off_t size, off_t offset)
   uint8_t *buffer = buffer_;
   off_t bytes_read = 0;
   uint8_t *bounce = NULL;
-
   while (size > 0)
     {
       /* Disk sector to read, starting byte offset within sector. */

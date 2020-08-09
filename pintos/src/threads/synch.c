@@ -229,6 +229,9 @@ void
 lock_release (struct lock *lock)
 {
   ASSERT (lock != NULL);
+  if (!lock_held_by_current_thread (lock)){
+    printf ("Melt down!\n");
+  }
   ASSERT (lock_held_by_current_thread (lock));
 
   lock->holder = NULL;
