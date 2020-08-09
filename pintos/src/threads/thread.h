@@ -102,6 +102,9 @@ struct thread
     /* Shared between thread.c and synch.c. */
     struct list_elem elem;              /* List element. */
 
+    /* Project 3 Task 3*/
+    struct dir *cwd;
+
 #ifdef USERPROG
     /* Owned by userprog/process.c. */
     uint32_t *pagedir;                  /* Page directory. */
@@ -113,6 +116,12 @@ struct thread
     /* Owned by thread.c. */
     unsigned magic;                     /* Detects stack overflow. */
   };
+
+/* Project 3 Task 3 */
+union fd {
+   struct file *file;
+	struct dir *dir;
+};
 
 struct wait_status {
   tid_t o_tid;
