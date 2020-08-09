@@ -188,7 +188,7 @@ syscall_handler (struct intr_frame *f UNUSED)
     || args[0] == SYS_EXEC) {
 
       /* Acquire the lock and obtain the current thread. */
-      lock_acquire(&file_lock);
+      //lock_acquire(&file_lock);
       struct thread *cur = thread_current ();
 
       if (args[0] == SYS_EXEC) {
@@ -199,12 +199,12 @@ syscall_handler (struct intr_frame *f UNUSED)
       } else if (args[0] == SYS_CREATE) {
         /* Check if &args[1], &args[2] are valid. */
         if (!is_valid((void *) args + 1, cur) || !is_valid((void *) args + 2, cur)) {
-          lock_release(&file_lock);
+          //lock_release(&file_lock);
           exit_with_code(-1);
         }
         /* Check if args[1] is valid and is not a null pointer. */
         if (!is_valid((void *) args[1], cur) || args[1] == 0) {
-          lock_release(&file_lock);
+          //lock_release(&file_lock);
           exit_with_code(-1);
         }
         /* Check every character in args[1] has a valid address until the null terminator. */
@@ -221,12 +221,12 @@ syscall_handler (struct intr_frame *f UNUSED)
       } else if (args[0] == SYS_REMOVE) {
         /* Check if &args[1] is valid.*/
         if (!is_valid((void *) args + 1, cur)) {
-          lock_release(&file_lock);
+          //lock_release(&file_lock);
           exit_with_code(-1);
         }
         /* Check if args[1] is valid and is not a null pointer. */
         if (!is_valid((void *) args[1], cur) || args[1] == 0) {
-          lock_release(&file_lock);
+          //lock_release(&file_lock);
           exit_with_code(-1);
         }
         /* Check every character in args[1] has a valid address until the null terminator. */
@@ -242,12 +242,12 @@ syscall_handler (struct intr_frame *f UNUSED)
       } else if (args[0] == SYS_OPEN) {
         /* Check if &args[1] is valid.*/
         if (!is_valid((void *) args + 1, cur)) {
-          lock_release(&file_lock);
+          //lock_release(&file_lock);
           exit_with_code(-1);
         }
         /* Check if args[1] is valid and is not a null pointer. */
         if (!is_valid((void *) args[1], cur) || args[1] == 0) {
-          lock_release(&file_lock);
+          //lock_release(&file_lock);
           exit_with_code(-1);
         }
         /* Check every character in args[1] has a valid address until the null terminator. */
@@ -282,7 +282,7 @@ syscall_handler (struct intr_frame *f UNUSED)
       } else if (args[0] == SYS_FILESIZE) {
         /* Check if &args[1] is valid.*/
         if (!is_valid((void *) args + 1, cur)) {
-          lock_release(&file_lock);
+          //lock_release(&file_lock);
           exit_with_code(-1);
         }
         /* Check if the file descriptor is valid. */
@@ -296,12 +296,12 @@ syscall_handler (struct intr_frame *f UNUSED)
       } else if (args[0] == SYS_READ) {
         /* Check if &args[1], &args[2], &args[3] are valid.*/
         if (!is_valid((void *) args + 1, cur) || !is_valid((void *) args + 2, cur) || !is_valid((void *) args + 3, cur)) {
-          lock_release(&file_lock);
+          //lock_release(&file_lock);
           exit_with_code(-1);
         }
         /* Check if args[2] is valid and is not a null pointer. */
         if (!is_valid((void *) args[2], cur) || args[2] == 0) {
-          lock_release(&file_lock);
+          //lock_release(&file_lock);
           exit_with_code(-1);
         }
         /* Check if the buffer is valid. */
@@ -333,12 +333,12 @@ syscall_handler (struct intr_frame *f UNUSED)
       } else if (args[0] == SYS_WRITE) {
         /* Check if &args[1], &args[2], &args[3] are valid.*/
         if (!is_valid((void *) args + 1, cur) || !is_valid((void *) args + 2, cur) || !is_valid((void *) args + 3, cur)) {
-          lock_release(&file_lock);
+          //lock_release(&file_lock);
           exit_with_code(-1);
         }
         /* Check if args[2] is valid and is not a null pointer. */
         if (!is_valid((void *) args[2], cur) || args[2] == 0) {
-          lock_release(&file_lock);
+          //lock_release(&file_lock);
           exit_with_code(-1);
         }
         /* Check if the buffer is valid. */
@@ -382,7 +382,7 @@ syscall_handler (struct intr_frame *f UNUSED)
       } else if (args[0] == SYS_SEEK) {
         /* Check if &args[1], &args[2] are valid.*/
         if (!is_valid((void *) args + 1, cur) || !is_valid((void *) args + 2, cur)) {
-          lock_release(&file_lock);
+          //lock_release(&file_lock);
           exit_with_code(-1);
         }
         /* Check if fd is valid. */
@@ -395,7 +395,7 @@ syscall_handler (struct intr_frame *f UNUSED)
       } else if (args[0] == SYS_TELL) {
         /* Check if &args[1] is valid.*/
         if (!is_valid((void *) args + 1, cur)) {
-          lock_release(&file_lock);
+          //lock_release(&file_lock);
           exit_with_code(-1);
         }
         /* Check if fd is valid. */
@@ -409,7 +409,7 @@ syscall_handler (struct intr_frame *f UNUSED)
       } else if (args[0] == SYS_CLOSE) {
         /* Check if &args[1] is valid.*/
         if (!is_valid((void *) args + 1, cur)) {
-          lock_release(&file_lock);
+          //lock_release(&file_lock);
           exit_with_code(-1);
         }
         /* Check if fd is valid. */
@@ -425,8 +425,10 @@ syscall_handler (struct intr_frame *f UNUSED)
 
 
       /* Release the lock and exit the critical section. */
+        char *c = "I am Mabel!!!";
       release:
-        lock_release(&file_lock);
+      c++;
+        //lock_release(&file_lock);
     }
 
 }
