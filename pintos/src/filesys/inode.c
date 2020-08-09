@@ -145,15 +145,24 @@ static void install_sector (struct inode_disk *disk_inode, int i)
 }
 
 static bool inode_extend (struct inode_disk *disk_inode, size_t sectors)
-{
-  if (!can_allocate (sectors)) return false;
-  size_t from = bytes_to_sector_index (disk_inode->length - 1);
-  for (size_t i = from + 1; i < from + sectors; i ++)
   {
-    install_sector (disk_inode, i);
+    size_t from = bytes_to_sector_index (disk_inode->length - 1);
+    if (disk_inode->length == 0)
+    {
+      from = 0;
+    }
+    else
+    {
+      from ++;
+    }
+    if (!can_allocate (sectors)) return false;
+    for (size_t i = from; i < from + sectors; i ++)
+    {
+      install_sector (disk_inode, i);
+      // printf ("Installed sector order %d\n", i);
+    }
+    return true;
   }
-  return true;
-}
 
 /*
 This function is called always from inode_write, what this does is it checks if 
@@ -164,8 +173,29 @@ static bool inode_extend_to_bytes (struct inode_disk *disk_inode, size_t new_len
 {
   size_t from = bytes_to_sector_index (disk_inode->length - 1);
   size_t to = bytes_to_sector_index (new_length - 1);
-  if (from >= to) return true;
-  return inode_extend (disk_inode, to - from);
+  if (disk_inode->length == 0)
+  {
+    if (inode_extend (disk_inode, to + 1)) {
+      // printf ("Extended 0 to %d bytes, to: %d\n", new_length, to + 1);
+      disk_inode->length = new_length;
+      return true;
+    }
+    return false;
+  }
+  if (from >= to)
+  {
+    if (disk_inode->length < new_length)
+    {
+      disk_inode->length = new_length;
+    }
+    return true;
+  }
+  if (inode_extend (disk_inode, to - from)) {
+      //printf ("Extended to from %d to %d bytes\n", disk_inode->length, new_length);
+      disk_inode->length = new_length;
+      return true;
+  }
+  return false;
 }
 
 static bool inode_extend_start (struct inode_disk *disk_inode, int sector, size_t sectors)
@@ -413,6 +443,7 @@ inode_close (struct inode *inode)
   if (should_free)
   {
     //printf ("Freeing %04x\n", inode);
+    block_write (fs_device, inode->sector, &inode->data);
     free (inode);
     //printf ("Freed %04x\n", inode);
   }
@@ -503,7 +534,8 @@ inode_write_at (struct inode *inode, const void *buffer_, off_t size,
   const uint8_t *buffer = buffer_;
   off_t bytes_written = 0;
   uint8_t *bounce = NULL;
-  inode_extend_to_bytes (&inode->data, offset+size);
+  bool s = inode_extend_to_bytes (&inode->data, offset+size);
+  // printf ("Success?: %d, writing from %d to %d\n", s, offset, offset + size);
   if (inode->deny_write_cnt)
   {
     rel (inode);
@@ -514,6 +546,7 @@ inode_write_at (struct inode *inode, const void *buffer_, off_t size,
     {
       /* Sector to write, starting byte offset within sector. */
       block_sector_t sector_idx = byte_to_sector (inode, offset);
+      // printf ("Writing to sector %d, offset %d\n", sector_idx, offset);
       int sector_ofs = offset % BLOCK_SECTOR_SIZE;
 
       /* Bytes left in inode, bytes left in sector, lesser of the two. */
@@ -559,7 +592,7 @@ inode_write_at (struct inode *inode, const void *buffer_, off_t size,
     }
   free (bounce);
   rel (inode);
-
+  // printf ("written: %d\n", bytes_written);
   return bytes_written;
 }
 
@@ -590,5 +623,6 @@ off_t
 inode_length (const struct inode *inode)
 {
   ASSERT (inode);
+  // printf ("Getting length: %d\n", inode->data.length);
   return inode->data.length;
 }
