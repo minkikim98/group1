@@ -277,6 +277,7 @@ inode_open (block_sector_t sector)
   struct list_elem *e;
   struct inode *inode;
 
+  //printf ("Opening a file sector: %d\n", sector);
   /* Check whether this inode is already open. */
   lock_acquire (&open_lock);
   for (e = list_begin (&open_inodes); e != list_end (&open_inodes);
@@ -285,12 +286,13 @@ inode_open (block_sector_t sector)
       inode = list_entry (e, struct inode, elem);
       if (inode->sector == sector)
         {
-          inode_reopen (inode);
           lock_release (&open_lock);
+          inode_reopen (inode);
           return inode;
         }
     }
 
+  //printf ("Opening a file, allocate\n");
   /* Allocate memory. */
   inode = malloc (sizeof *inode);
   if (inode == NULL)
@@ -308,6 +310,7 @@ inode_open (block_sector_t sector)
   inode->removed = false;
   lock_init (&inode->inode_lock);
   block_read (fs_device, inode->sector, &inode->data);
+  //printf ("Opening a file, return\n");
   return inode;
 }
 
@@ -339,13 +342,13 @@ inode_get_inumber (const struct inode *inode)
 void
 inode_close (struct inode *inode)
 {
-  lock (inode);
   /* Ignore null pointer. */
+  //printf ("Closing inode: %04x\n", inode);
   if (inode == NULL)
   {
-    rel (inode);
     return;
   }
+  lock (inode);
   bool should_free = false;
   /* Release resources if this was the last opener. */
   if (--inode->open_cnt == 0)
