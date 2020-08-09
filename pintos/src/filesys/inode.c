@@ -356,10 +356,11 @@ inode_close (struct inode *inode)
   //lock_release (&ll);
     return;
   }
-  //lock_acquire (&ll);
+  lock_acquire (&ll);
   lock (inode);
   bool should_free = false;
   /* Release resources if this was the last opener. */
+  //printf ("Closing inode: %04x, open: %d\n", inode, inode->open_cnt);
   if (--inode->open_cnt == 0)
   {
     //printf ("Inode coutn is zero: %04x\n", inode);
@@ -403,15 +404,21 @@ inode_close (struct inode *inode)
     // //free (inode);
     // lock_release (&lock);
   }
+  //printf ("after inode: %04x, open: %d\n", inode, inode->open_cnt);
   //printf ("b4 locking\n");
-  rel (inode);
-  //printf ("after locking\n");
+  struct lock lll = inode->inode_lock;
   if (should_free)
   {
-    //printf ("Freeing %04x\n", inode);
+    //printf ("Freeing %04x, cout: %d\n", inode, inode->open_cnt);
+    rel (inode);
     free (inode);
+    //printf ("Freed %04x\n", inode);
+  }else
+  {
+    rel (inode);
   }
-  //lock_release (&ll);
+  //printf ("after locking\n");
+  lock_release (&ll);
 }
 
 /* Marks INODE to be deleted when it is closed by the last caller who
@@ -419,8 +426,8 @@ inode_close (struct inode *inode)
 void
 inode_remove (struct inode *inode)
 {
-  lock (inode);
   ASSERT (inode != NULL);
+  lock (inode);
   inode->removed = true;
   rel (inode);
 }
