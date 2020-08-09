@@ -353,12 +353,14 @@ inode_close (struct inode *inode)
   /* Release resources if this was the last opener. */
   if (--inode->open_cnt == 0)
     {
+      //printf ("Inode coutn is zero: %04x\n", inode);
       /* Remove from inode list and release lock. */
       list_remove (&inode->elem);
 
       /* Deallocate blocks if removed. */
       if (inode->removed)
         {
+          //printf ("I shall close inode: %04x\n", inode);
           free_map_release (inode->sector, 1);
           // free_map_release (inode->data.start,
           //                   bytes_to_sectors (inode->data.length));
@@ -386,12 +388,16 @@ inode_close (struct inode *inode)
           }
           clear_data (inode->data.single_ptr, 2);
           clear_data (inode->data.double_ptr, 3);
+          should_free = true;
         }
-      should_free = true;
     }
+  //printf ("b4 locking\n");
   rel (inode);
+  //printf ("after locking\n");
   if (should_free)
+  {
     free (inode);
+  }
 }
 
 /* Marks INODE to be deleted when it is closed by the last caller who

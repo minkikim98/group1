@@ -427,7 +427,7 @@ syscall_handler (struct intr_frame *f UNUSED)
       /* Release the lock and exit the critical section. */
         char *c = "I am Mabel!!!";
       release:
-        c ++;
+      c++;
         //lock_release(&file_lock);
     }
 
