@@ -11,16 +11,12 @@
 /* Identifies an inode. */
 #define INODE_MAGIC 0x494e4f44
 
-#define NUM_DIRECT_PTRS 0
+#define NUM_DIRECT_PTRS 12
 
 /* On-disk inode.
    Must be exactly BLOCK_SECTOR_SIZE bytes long. */
 struct inode_disk
   {
-    // block_sector_t start;               /* First data sector. */
-    // off_t length;                       /* File size in bytes. */
-    // unsigned magic;                     /* Magic number. */
-    // uint32_t unused[125];               /* Not used. */
     off_t length;
     uint32_t isdir;
     block_sector_t direct_ptrs[NUM_DIRECT_PTRS];
@@ -62,11 +58,6 @@ struct inode
     struct inode_disk data;             /* Inode content. */
   };
 
-static bool inode_extend (struct inode_disk *disk_inode, size_t sectors)
-{
-  return true;
-}
-
 static bool get_sector (block_sector_t *sector)
 {
   bool b = free_map_allocate (1, sector);
@@ -78,7 +69,7 @@ static bool get_sector (block_sector_t *sector)
 static bool can_allocate (size_t num)
 {
   block_sector_t sectors[num];
-  for (int i = 0; i < num; i++)
+  for (size_t i = 0; i < num; i++)
   {
     if (!get_sector (&sectors[i]))
     {
@@ -96,8 +87,7 @@ static bool can_allocate (size_t num)
   return true;
 }
 
-block_sector_t read_sector (block_sector_t sector, int index);
-block_sector_t read_sector (block_sector_t sector, int index)
+static block_sector_t read_sector (block_sector_t sector, int index)
 {
   ASSERT (sector);
   uint8_t buffer[BLOCK_SECTOR_SIZE];
@@ -105,8 +95,7 @@ block_sector_t read_sector (block_sector_t sector, int index)
   return ((block_sector_t*) buffer)[index];
 }
 
-void write_sector (block_sector_t sector, int index, block_sector_t good_stuff);
-void write_sector (block_sector_t sector, int index, block_sector_t good_stuff)
+static void write_sector (block_sector_t sector, int index, block_sector_t good_stuff)
 {
   ASSERT (sector);
   uint8_t buffer[BLOCK_SECTOR_SIZE];
@@ -118,13 +107,7 @@ void write_sector (block_sector_t sector, int index, block_sector_t good_stuff)
 
 #define Indirect_Block (BLOCK_SECTOR_SIZE / 4)
 
-// block_sector_t get_single (block_sector_t index){
-//   return (index - NUM_DIRECT_PTRS) / (BLOCK_SECTOR_SIZE / 4);
-// }
-block_sector_t we;
-int written_to = 0;
-void install_sector (struct inode_disk *disk_inode, int i);
-void install_sector (struct inode_disk *disk_inode, int i)
+static void install_sector (struct inode_disk *disk_inode, int i)
 {
   ASSERT (i < NUM_DIRECT_PTRS + BLOCK_SECTOR_SIZE / 4 * (1 + BLOCK_SECTOR_SIZE / 4));
   block_sector_t sec;
@@ -156,62 +139,42 @@ void install_sector (struct inode_disk *disk_inode, int i)
       ASSERT (get_sector (&ind_sec));
       write_sector (disk_inode->double_ptr, dab / Indirect_Block, ind_sec);
     }
-    
-    //int double_dab = dab % Indirect_Block;
-    //ASSERT ("Maple" == NULL);
     write_sector (ind_sec, dab % Indirect_Block, sec);
-    // block_sector_t double_sec = read_sector (ind_sec, dab % Indirect_Block);
-    // if (double_sec == 0)
-    // {
-    //   ASSERT (get_sector (&double_sec));
-    //   write_sector (ind_sec, dab % Indirect_Block, double_sec);
-    //   //ASSERT ("Maple" == NULL);
-    // }
-    // write_sector (double_sec, dab % Indirect_Block, sec);
-    if (dab == 0)
-    {
-      written_to ++;
-      we = sec;
-      
-      block_sector_t sec_mabel = read_sector (disk_inode->double_ptr, dab / Indirect_Block);
-      ASSERT (sec_mabel);
-      ASSERT (sec_mabel == ind_sec);
-      block_sector_t thd_mabel = read_sector (sec_mabel, dab % Indirect_Block);
-      ASSERT (thd_mabel == sec);
-    }
   }
 }
 
-#define OUR
+static bool inode_extend (struct inode_disk *disk_inode, size_t sectors)
+{
+  if (!can_allocate (sectors)) return false;
+  size_t from = bytes_to_sector_index (disk_inode->length - 1);
+  for (size_t i = from + 1; i < from + sectors; i ++)
+  {
+    install_sector (disk_inode, i);
+  }
+  return true;
+}
 
-int l = 0;
+/*
+This function is called always from inode_write, what this does is it checks if 
+the disk_node needs to be extended given its new length and extends accordingly
+if it needs to. :^)
+*/
+static bool inode_extend_to_bytes (struct inode_disk *disk_inode, size_t new_length)
+{
+  size_t from = bytes_to_sector_index (disk_inode->length - 1);
+  size_t to = bytes_to_sector_index (new_length - 1);
+  if (from >= to) return true;
+  return inode_extend (disk_inode, to - from);
+}
+
 static bool inode_extend_start (struct inode_disk *disk_inode, int sector, size_t sectors)
 {
-#ifndef OUR
-  if (free_map_allocate (sectors, &disk_inode->direct_ptrs[0]))
-  {
-    block_write (fs_device, sector, disk_inode);
-    if (sectors > 0)
-      {
-        static char zeros[BLOCK_SECTOR_SIZE];
-        size_t i;
-
-        for (i = 0; i < sectors; i++)
-          block_write (fs_device, disk_inode->direct_ptrs[0] + i, zeros);
-      }
-    return true;
-  }
-  return false;
-#else
-  //printf ("I want this many sectors: %d\n", sectors);
-
   for (size_t i = 0; i < sectors; i++)
   {
     install_sector (disk_inode, i);
   }
   block_write (fs_device, sector, disk_inode);
   return true;
-#endif
 }
 
 /* Returns the block device sector that contains byte offset POS
@@ -221,16 +184,6 @@ static bool inode_extend_start (struct inode_disk *disk_inode, int sector, size_
 static block_sector_t
 byte_to_sector (const struct inode *inode, off_t pos)
 {
-#ifndef OUR
-  ASSERT (inode != NULL);
-  if (pos < inode->data.length)
-    return inode->data.direct_ptrs[0] + pos / BLOCK_SECTOR_SIZE;
-  else
-  {
-    //ASSERT ("I am depressed\n" == NULL);
-    return -1;
-  }
-#else
   ASSERT (inode != NULL);
   int i = bytes_to_sector_index (pos);
   ASSERT (i < NUM_DIRECT_PTRS + BLOCK_SECTOR_SIZE / 4 * (1 + BLOCK_SECTOR_SIZE / 4));
@@ -248,22 +201,15 @@ byte_to_sector (const struct inode *inode, off_t pos)
   }
   else
   {
-    //ASSERT ("Mabel" == "Maple Syrup");
     ASSERT (inode->data.double_ptr);
     block_sector_t dab = i - NUM_DIRECT_PTRS - Indirect_Block;
     ASSERT (dab >= 0);
     block_sector_t sec_mabel = read_sector (inode->data.double_ptr, dab / Indirect_Block);
     ASSERT (sec_mabel);
     sector = read_sector (sec_mabel, dab % Indirect_Block);
-    if (dab == 0)
-    {
-      ASSERT (written_to == 1);
-      ASSERT (sector == we);
-    }
   }
   ASSERT (sector);
   return sector;
-#endif
 }
 
 /* List of open inodes, so that opening a single inode twice
@@ -300,13 +246,11 @@ inode_create (block_sector_t sector, off_t length)
     size_t sectors = bytes_to_sectors (length);
     disk_inode->length = length;
     disk_inode->magic = INODE_MAGIC;
-    ASSERT (length < 8000000);
     if (!can_allocate (length / BLOCK_SECTOR_SIZE))
     {
       return false;
     }
     success = inode_extend_start (disk_inode, sector, sectors);
-    //free (disk_inode);
   }
   return success;
 }
@@ -343,6 +287,7 @@ inode_open (block_sector_t sector)
   inode->open_cnt = 1;
   inode->deny_write_cnt = 0;
   inode->removed = false;
+  lock_init (&inode->inode_lock);
   block_read (fs_device, inode->sector, &inode->data);
   return inode;
 }
@@ -351,8 +296,10 @@ inode_open (block_sector_t sector)
 struct inode *
 inode_reopen (struct inode *inode)
 {
+  lock_acquire (&inode->inode_lock);
   if (inode != NULL)
     inode->open_cnt++;
+  lock_release (&inode->inode_lock);
   return inode;
 }
 
@@ -430,6 +377,7 @@ inode_remove (struct inode *inode)
 off_t
 inode_read_at (struct inode *inode, void *buffer_, off_t size, off_t offset)
 {
+  lock_acquire (&inode->inode_lock);
   uint8_t *buffer = buffer_;
   off_t bytes_read = 0;
   uint8_t *bounce = NULL;
@@ -475,6 +423,7 @@ inode_read_at (struct inode *inode, void *buffer_, off_t size, off_t offset)
       bytes_read += chunk_size;
     }
   free (bounce);
+  lock_release (&inode->inode_lock);
 
   return bytes_read;
 }
@@ -488,10 +437,11 @@ off_t
 inode_write_at (struct inode *inode, const void *buffer_, off_t size,
                 off_t offset)
 {
+  lock_acquire (&inode->inode_lock);
   const uint8_t *buffer = buffer_;
   off_t bytes_written = 0;
   uint8_t *bounce = NULL;
-
+  inode_extend_to_bytes (&inode->data, offset+size);
   if (inode->deny_write_cnt)
     return 0;
 
@@ -543,6 +493,7 @@ inode_write_at (struct inode *inode, const void *buffer_, off_t size,
       bytes_written += chunk_size;
     }
   free (bounce);
+  lock_release (&inode->inode_lock);
 
   return bytes_written;
 }
