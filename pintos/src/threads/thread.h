@@ -103,7 +103,7 @@ struct thread
     struct list_elem elem;              /* List element. */
 
     /* Project 3 Task 3 */
-    struct dir *dir;
+    //struct dir *dir;
 
 #ifdef USERPROG
     /* Owned by userprog/process.c. */
