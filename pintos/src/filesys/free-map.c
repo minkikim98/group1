@@ -12,12 +12,12 @@ static struct lock da_lock;
 
 static void lock ()
 {
-  //lock_acquire (&da_lock);
+  lock_acquire (&da_lock);
 }
 
 static void rel ()
 {
-  //lock_release (&da_lock);
+  lock_release (&da_lock);
 }
 /* Initializes the free map. */
 void

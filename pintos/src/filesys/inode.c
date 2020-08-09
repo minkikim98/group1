@@ -257,12 +257,12 @@ inode_create (block_sector_t sector, off_t length)
 
 static void lock (struct inode *inode)
 {
-  //lock_acquire (&inode->inode_lock);
+  lock_acquire (&inode->inode_lock);
 }
 
 static void rel (struct inode *inode)
 {
-  //lock_release (&inode->inode_lock);
+  lock_release (&inode->inode_lock);
 }
 
 /* Reads an inode from SECTOR
@@ -372,10 +372,9 @@ inode_close (struct inode *inode)
           // clear_data (inode->data.single_ptr, 2);
           // clear_data (inode->data.double_ptr, 3);
         }
-
+      rel (inode);
       free (inode);
     }
-  rel (inode);
 }
 
 /* Marks INODE to be deleted when it is closed by the last caller who
