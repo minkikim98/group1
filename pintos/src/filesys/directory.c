@@ -120,8 +120,8 @@ bool
 dir_lookup (const struct dir *dir, const char *name,
             struct inode **inode)
 {
-  printf("dir is: %x\n", dir);
-  printf("name is: %s\n", name);
+  // printf("dir is: %x\n", dir);
+  // printf("name is: %s\n", name);
   struct dir_entry e;
 
   ASSERT (dir != NULL);
