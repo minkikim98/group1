@@ -5,6 +5,7 @@
 #include "filesys/filesys.h"
 #include "filesys/inode.h"
 #include "threads/malloc.h"
+#include "threads/thread.h"
 
 /* A directory. */
 struct dir
@@ -234,3 +235,96 @@ dir_readdir (struct dir *dir, char name[NAME_MAX + 1])
     }
   return false;
 }
+
+/* Project 3 Task 3 */
+
+/* Extracts a file name part from *SRCP into PART, and updates *SRCP so that the
+   next call will return the next file name part. Returns 1 if successful, 0 at
+   end of string, -1 for a too-long file name part. */
+static int
+get_next_part (char part[NAME_MAX + 1], const char **srcp) {
+  const char *src = *srcp;
+  char *dst = part;
+  /* Skip leading slashes.  If it’s all slashes, we’re done. */
+  while (*src == '/')
+    src++;
+  if (*src == '\0')
+    return 0;
+  /* Copy up to NAME_MAX character from SRC to DST.  Add null terminator. */
+  while (*src != '/' && *src != '\0') {
+    if (dst < part + NAME_MAX)
+      *dst++ = *src;
+    else
+      return -1;
+    src++; 
+  }
+  *dst = '\0';
+  /* Advance source pointer. */
+  *srcp = src;
+  return 1;
+}
+
+static bool is_relative(char *path) {
+  if (path[0] == '/') return true;
+  else return false;
+}
+
+struct dir *get_dir_from_path(char *path) {
+  struct thread *t = thread_current();
+  struct dir *cur_dir;
+  struct inode **next;
+  // inode_init(next);
+  char part[NAME_MAX + 1];
+  
+  // Check if path is relative or absolute.
+  if (is_relative(path)) cur_dir = t->cwd;
+  else cur_dir = dir_open_root();
+
+  // Iterate through path and find subdirectories.
+  // NOTE: Case where get_next_part returns -1.
+  while (get_next_part(part, &path)) {
+    if (dir_lookup(cur_dir, path, next)) {
+      // Check if result is a directory.
+      if (*next == NULL) return NULL;
+      if (!inode_is_dir(*next)) return NULL;
+      
+      cur_dir = dir_open(*next);
+    }
+    else {
+      return NULL;
+    }
+  }
+  return cur_dir;
+  // NOTE: Do we need to close opened files?
+}
+
+// struct file *get_file_from_path(char *path) {
+//   struct thread *t = thread_current();
+//   struct dir *cur_dir;
+//   struct inode *next;
+//   char part[NAME_MAX + 1];
+  
+//   // Check if path is relative or absolute.
+//   if (is_relative(path)) cur_dir = t->cwd;
+//   else cur_dir = dir_open_root();
+
+//   // Iterate through path and find subdirectories.
+//   // NOTE: Case where get_next_part returns -1.
+//   while (get_next_part(part, &path)) {
+//     if (part == path) {
+//       if (*next->data.is_dir != 0) return NULL;
+
+//     }
+//     if (dir_lookup(cur_dir, path, &next)) {
+//       // Check if result is a directory.
+//       if (*next->data.is_dir != 1) return NULL;
+      
+//       cur_dir = dir_open(next);
+//     }
+//     else {
+//       return NULL;
+//     }
+//   }
+//   return cur_dir;
+//   // NOTE: Do we need to close opened files?
+// }
