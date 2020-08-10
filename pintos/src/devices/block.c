@@ -13,7 +13,7 @@ struct buffer_entry {
 	char buffer[BLOCK_SECTOR_SIZE];
 	int use_bit;
 	int dirty_bit;
-	struct lock sector_lock;
+	struct lock *sector_lock;
 };
 
 /* A buffer cache. */
@@ -26,7 +26,13 @@ int clock_hand;
 struct lock *buffer_cache_lock;
 
 /* Semaphore to indicate the number of occupied buffer entries. */
-struct semaphore *rw_sema;
+struct semaphore *active_sema;
+
+/* Condition variable to indicate there is at least one inactive entry. */
+struct condition *inactive_entry;
+
+/* Lock for inactive_entry. */
+struct lock *inactive_lock;
 
 /* A block device. */
 struct block
@@ -71,13 +77,54 @@ block_type_name (enum block_type type)
   return block_type_names[type];
 }
 
+/* Get the offset of block_sector_t in the buffer_cache.
+Acquire a lock for the corresponding entry and return the offset.
+Return -1 if it's not inside the buffer cache.
+We acquire buffer_cache_lock to make sure no eviction will happen in this process. */
+int acquire_buffer_entry_lock(block_sector_t sector) {
+	lock_acquire(buffer_cache_lock);
+	int i;
+	for (i = 0; i < 64; i ++) {
+		if (buffer_cache[i]->buffered_sector == sector) {
+			lock_acquire(buffer_cache[i]->sector_lock);
+			lock_release(buffer_cache_lock);
+			return i;
+		}
+	}
+	lock_release(buffer_cache_lock);
+	return -1;
+}
+
+/* Check if the corresponding buffer entry is still present.
+1. The buffer entry can not be NULL.
+2. The sector number must stay the same.
+3. The block entry should be the same one that the thread acquires the lock on.
+The caller must have acquired the lock on the buffer entry if present.
+As a result, we don't need to acquire buffer_cache_lock because if it's still
+present, it won't be evicted. */
+bool check_buffer_presence(block_sector_t sector, int offset) {
+	if (buffer_cache[offset] == NULL) {
+		return false;
+	}
+	if (buffer_cache[offset]->buffered_sector != sector) {
+		return false;
+	}
+	if (!lock_held_by_current_thread(buffer_cache[offset]->sector_lock)) {
+		return false;
+	}
+	return true;
+}
+
 /* Evicts buffer entry from buffer cache. */
 void buffer_evict(int offset) {
   ASSERT (lock_held_by_current_thread(buffer_cache_lock));
 
   struct buffer_entry *cur = buffer_cache[offset];
+	ASSERT (lock_held_by_current_thread(cur->sector_lock));
+
   block_write(cur->sector_block, cur->buffered_sector, cur->buffer);
   buffer_cache[offset] = NULL;
+	lock_release(cur->sector_lock);
   free(cur);
 }
 
@@ -89,7 +136,9 @@ void init_buffer_cache (void) {
   }
   clock_hand = 0;
   lock_init(buffer_cache_lock);
-  sema_init(rw_sema, 64);
+  sema_init(active_sema, 64);
+	lock_init(inactive_lock);
+	cond_init(inactive_entry);
 }
 
 /* Flush buffer cache. */
@@ -98,10 +147,17 @@ void flush_buffer_cache (void) {
   int i = 0;
   for (; i < 64; i ++) {
     if (buffer_cache[i] != NULL) {
+			lock_acquire(buffer_cache[i] -> sector_lock);
       buffer_evict(i);
     }
   }
   lock_release(buffer_cache_lock);
+}
+
+/* Evict a buffer entry with clock algorithm. */
+int clock_algorithm_evict(void) {
+	ASSERT (lock_held_by_current_thread(buffer_cache_lock));
+	return 0;
 }
 
 /* Returns the block device fulfilling the given ROLE, or a null
