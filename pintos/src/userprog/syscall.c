@@ -10,6 +10,7 @@
 #include "threads/vaddr.h"
 #include "filesys/filesys.h"
 #include "filesys/file.h"
+#include "filesys/directory.h"
 #include "devices/input.h"
 
 #include "threads/vaddr.h"
@@ -27,7 +28,7 @@ syscall_init (void)
   lock_init(&file_lock);
 }
 
-/**
+/*
 * Checks VADDR is not NULL, is in userspace, and is mapped.
 */
 static bool
@@ -403,17 +404,38 @@ syscall_handler (struct intr_frame *f UNUSED)
   }
   
   if (args[0] == SYS_CHDIR) {
-
+    /* NOTE: This syscall should close the previous cwd using dir_close. */
   }
+  
   if (args[0] == SYS_MKDIR) {
-
+    /* Check if &args[1] is valid.*/
+    if (!is_valid((void *)args + 1, cur)) {
+        exit_with_code(-1);
+    }
+    /* Check if args[1] is valid and is not a null pointer. */
+    if (!is_valid((void *)args[1], cur) || args[1] == 0) {
+        exit_with_code(-1);
+    }
+    /* Check every character in args[1] has a valid address until the null terminator. */
+    int n = is_valid_string((char *)args[1], cur);
+    if (n < 0) {
+      f->eax = false;
+      return;
+    }
+    /* Copy over args[1]. */
+    char file_name[n];
+    memcpy((char *)file_name, (char *)args[1], n + 1);
+    get_dir_from_path(file_name);
   }
+  
   if (args[0] == SYS_READDIR) {
     
   }
+  
   if (args[0] == SYS_ISDIR) {
     
   }
+  
   if (args[0] == SYS_INUMBER) {
     
   }

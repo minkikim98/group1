@@ -120,6 +120,8 @@ bool
 dir_lookup (const struct dir *dir, const char *name,
             struct inode **inode)
 {
+  printf("dir is: %x\n", dir);
+  printf("name is: %s\n", name);
   struct dir_entry e;
 
   ASSERT (dir != NULL);
@@ -265,25 +267,35 @@ get_next_part (char part[NAME_MAX + 1], const char **srcp) {
 }
 
 static bool is_relative(char *path) {
-  if (path[0] == '/') return true;
-  else return false;
+  // printf("first char: %c\n", path[0]);
+  if (path[0] == '/') return false;
+  else return true;
+}
+
+static bool is_root(struct dir *dir) {
+  struct dir *root = 
 }
 
 struct dir *get_dir_from_path(char *path) {
+
+  ASSERT (path != NULL);
+
   struct thread *t = thread_current();
   struct dir *cur_dir;
   struct inode **next;
-  // inode_init(next);
   char part[NAME_MAX + 1];
+
+  const char *saved_path = malloc(strlen(path));
+  strlcpy(saved_path, path, strlen(path));
   
   // Check if path is relative or absolute.
-  if (is_relative(path)) cur_dir = t->cwd;
+  if (is_relative(path)) cur_dir = dir_reopen(t->cwd);
   else cur_dir = dir_open_root();
 
   // Iterate through path and find subdirectories.
   // NOTE: Case where get_next_part returns -1.
-  while (get_next_part(part, &path)) {
-    if (dir_lookup(cur_dir, path, next)) {
+  while (get_next_part(part, &saved_path)) {
+    if (dir_lookup(cur_dir, saved_path, next)) {
       // Check if result is a directory.
       if (*next == NULL) return NULL;
       if (!inode_is_dir(*next)) return NULL;
@@ -291,11 +303,13 @@ struct dir *get_dir_from_path(char *path) {
       cur_dir = dir_open(*next);
     }
     else {
+      free(saved_path);
       return NULL;
     }
   }
+  free(saved_path);
   return cur_dir;
-  // NOTE: Do we need to close opened files?
+  // NOTE: We should close our opened directories after use.
 }
 
 // struct file *get_file_from_path(char *path) {
