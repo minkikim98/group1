@@ -4,6 +4,29 @@
 #include <stdio.h>
 #include "devices/ide.h"
 #include "threads/malloc.h"
+#include "threads/synch.h"
+
+/* A buffer cache entry struct. */
+struct buffer_entry {
+	block_sector_t buffered_sector;
+	struct block *sector_block;
+	char buffer[BLOCK_SECTOR_SIZE];
+	int use_bit;
+	int dirty_bit;
+	struct lock sector_lock;
+};
+
+/* A buffer cache. */
+struct buffer_entry *buffer_cache[64];
+
+/* Clock hand for the clock algorithm. */
+int clock_hand;
+
+/* Lock to add and evict buffer entry. */
+struct lock *buffer_cache_lock;
+
+/* Semaphore to indicate the number of occupied buffer entries. */
+struct semaphore *rw_sema;
 
 /* A block device. */
 struct block
@@ -46,6 +69,39 @@ block_type_name (enum block_type type)
 
   ASSERT (type < BLOCK_CNT);
   return block_type_names[type];
+}
+
+/* Evicts buffer entry from buffer cache. */
+void buffer_evict(int offset) {
+  ASSERT (lock_held_by_current_thread(buffer_cache_lock));
+
+  struct buffer_entry *cur = buffer_cache[offset];
+  block_write(cur->sector_block, cur->buffered_sector, cur->buffer);
+  buffer_cache[offset] = NULL;
+  free(cur);
+}
+
+/* Initialize buffer cache. */
+void init_buffer_cache (void) {
+  int i = 0;
+  for (; i < 64; i ++) {
+    buffer_cache[i] = NULL;
+  }
+  clock_hand = 0;
+  lock_init(buffer_cache_lock);
+  sema_init(rw_sema, 64);
+}
+
+/* Flush buffer cache. */
+void flush_buffer_cache (void) {
+  lock_acquire(buffer_cache_lock);
+  int i = 0;
+  for (; i < 64; i ++) {
+    if (buffer_cache[i] != NULL) {
+      buffer_evict(i);
+    }
+  }
+  lock_release(buffer_cache_lock);
 }
 
 /* Returns the block device fulfilling the given ROLE, or a null
@@ -220,4 +276,3 @@ list_elem_to_block (struct list_elem *list_elem)
           ? list_entry (list_elem, struct block, list_elem)
           : NULL);
 }
-

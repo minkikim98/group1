@@ -41,6 +41,11 @@ enum block_type
 
 const char *block_type_name (enum block_type);
 
+/* Project 3 Task 1. */
+void buffer_evict(int offset);
+void init_buffer_cache (void);
+void flush_buffer_cache (void);
+
 /* Finding block devices. */
 struct block *block_get_role (enum block_type);
 void block_set_role (enum block_type, struct block *);
