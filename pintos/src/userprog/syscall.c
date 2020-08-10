@@ -100,8 +100,8 @@ syscall_handler (struct intr_frame *f UNUSED)
   /* printf("System call number: %d\n", args[0]); */
 
   /*
-   * Helper functions to check if user-provided pointer is valid. Functions vary
-   * to account for the type of user pointer provided.
+   * Helper functions to check if user-provided pointer is valid. Functions vary 
+   * to account for the type of user pointer provided. 
    */
 
   inline bool is_bad_p_byte(void *user_p) {
@@ -123,9 +123,9 @@ syscall_handler (struct intr_frame *f UNUSED)
   }
 
   /*
-   * Helper functions to exit thread and print an error code message with exit code.
+   * Helper functions to exit thread and print an error code message with exit code. 
    * Some functions can also check conditions, then exit.
-   */
+   */ 
   void exit_with_code(int exit_code) {
     cur->o_wait_status->o_exit_code = exit_code;
     printf ("%s: exit(%d)\n", &cur->name, exit_code);
@@ -161,7 +161,7 @@ syscall_handler (struct intr_frame *f UNUSED)
   if (args[0] == SYS_WAIT) {
     //No need to check pointers because it's an int
     exit_if_bad_arg(1);
-    f->eax = process_wait(args[1]);
+    f->eax = process_wait(args[1]); 
   }
 
   if (args[0] == SYS_EXEC) {
@@ -307,7 +307,7 @@ syscall_handler (struct intr_frame *f UNUSED)
     /* Call the appropriate filesys function. */
     f->eax = file_read(cur->file_descriptors[fd], buffer, size);
   }
-
+  
   if (args[0] == SYS_WRITE) {
     /* Check if &args[1], &args[2], &args[3] are valid.*/
     if (!is_valid((void *) args + 1, cur) || !is_valid((void *) args + 2, cur) || !is_valid((void *) args + 3, cur)) {
@@ -356,7 +356,7 @@ syscall_handler (struct intr_frame *f UNUSED)
     /* Call the appropriate filesys function. */
     f->eax = file_write(cur->file_descriptors[fd], buffer, size);
   }
-
+  
   if (args[0] == SYS_SEEK) {
     /* Check if &args[1], &args[2] are valid.*/
     if (!is_valid((void *) args + 1, cur) || !is_valid((void *) args + 2, cur)) {
@@ -370,7 +370,7 @@ syscall_handler (struct intr_frame *f UNUSED)
     /* Call the appropriate filesys function. */
     file_seek(cur->file_descriptors[fd], args[2]);
   }
-
+  
   if (args[0] == SYS_TELL) {
     /* Check if &args[1] is valid.*/
     if (!is_valid((void *) args + 1, cur)) {
@@ -386,7 +386,7 @@ syscall_handler (struct intr_frame *f UNUSED)
     /* Call the appropriate filesys function. */
     f->eax = file_tell(cur->file_descriptors[fd]);
   }
-
+  
   if (args[0] == SYS_CLOSE) {
     /* Check if &args[1] is valid.*/
     if (!is_valid((void *) args + 1, cur)) {
@@ -402,11 +402,11 @@ syscall_handler (struct intr_frame *f UNUSED)
     /* Free the fd for future use. */
     cur->file_descriptors[fd] = NULL;
   }
-
+  
   if (args[0] == SYS_CHDIR) {
     /* NOTE: This syscall should close the previous cwd using dir_close. */
   }
-
+  
   if (args[0] == SYS_MKDIR) {
     /* Check if &args[1] is valid.*/
     if (!is_valid((void *)args + 1, cur)) {
@@ -425,26 +425,30 @@ syscall_handler (struct intr_frame *f UNUSED)
     /* Copy over args[1]. */
     char file_name[n];
     memcpy((char *)file_name, (char *)args[1], n + 1);
-    get_dir_from_path(file_name);
-  }
 
+    // If dir already exists, 
+    if (get_dir_from_path(file_name) != NULL) f->eax = 0;
+
+  }
+  
   if (args[0] == SYS_READDIR) {
-
+    
   }
-
+  
   if (args[0] == SYS_ISDIR) {
-
+    
   }
-
+  
   /* Implemented as part of Proj3 Task 2
-  which returns the unique inode number of file associated with a particular file descriptor.
+   which returns the unique inode number of file associated with a particular file descriptor.
 
-  Returns the inode number of the inode associated with fd, which
-  may represent an ordinary file or a directory.
-  An inode number persistently identifies a file or directory. It is unique during the file’s existence.
-  In Pintos, the sector number of the inode is suitable for use as an inode number.
+   Returns the inode number of the inode associated with fd, which
+   may represent an ordinary file or a directory.
+   An inode number persistently identifies a file or directory. It is unique during the file’s existence.
+   In Pintos, the sector number of the inode is suitable for use as an inode number.
 
-  According to Sam, the inumber of a file is the disk address (block_sector_t) of its inode. */
+   According to Sam, the inumber of a file is the disk address (block_sector_t) of its inode. */
+
   if (args[0] == SYS_INUMBER) {
     exit_if_bad_arg(1);
     /* Check if &args[1] is valid.*/
@@ -464,12 +468,12 @@ syscall_handler (struct intr_frame *f UNUSED)
     return;
   }
 
-
+    
   /**
   * Task 3: File operations.
   * Below is a critical section that uses the global lock FILE_LOCK.
   */
-
+ 
   // if (args[0] == SYS_CREATE
   //   || args[0] == SYS_REMOVE
   //   || args[0] == SYS_OPEN
@@ -723,6 +727,6 @@ syscall_handler (struct intr_frame *f UNUSED)
   //     release:
   //     c++;
   //       //lock_release(&file_lock);
-  //   }
+  //   } 
 
 }
