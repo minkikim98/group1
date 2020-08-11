@@ -57,9 +57,6 @@ struct inode
     struct condition until_not_extending;
     struct condition until_no_writers;
     struct inode_disk data;             /* Inode content. */
-
-    /* Project 3 Task 3 */
-    struct lock inode_dir_lock;
   };
 
 static bool get_sector (block_sector_t *sector)
