@@ -5,7 +5,6 @@
 #include "filesys/filesys.h"
 #include "filesys/inode.h"
 #include "threads/malloc.h"
-#include "threads/thread.h"
 
 /* A directory. */
 struct dir
@@ -120,8 +119,6 @@ bool
 dir_lookup (const struct dir *dir, const char *name,
             struct inode **inode)
 {
-  printf("dir is: %x\n", dir);
-  printf("name is: %s\n", name);
   struct dir_entry e;
 
   ASSERT (dir != NULL);
@@ -237,127 +234,3 @@ dir_readdir (struct dir *dir, char name[NAME_MAX + 1])
     }
   return false;
 }
-
-/* Project 3 Task 3 */
-
-/* Extracts a file name part from *SRCP into PART, and updates *SRCP so that the
-   next call will return the next file name part. Returns 1 if successful, 0 at
-   end of string, -1 for a too-long file name part. */
-static int
-get_next_part (char part[NAME_MAX + 1], const char **srcp) {
-  // printf("in get_next_part\n");
-  const char *src = *srcp;
-  char *dst = part;
-  /* Skip leading slashes.  If it’s all slashes, we’re done. */
-  while (*src == '/')
-    src++;
-  if (*src == '\0')
-    return 0;
-  /* Copy up to NAME_MAX character from SRC to DST.  Add null terminator. */
-  while (*src != '/' && *src != '\0') {
-    if (dst < part + NAME_MAX)
-      *dst++ = *src;
-    else
-      return -1;
-    src++; 
-  }
-  *dst = '\0';
-  /* Advance source pointer. */
-  *srcp = src;
-  return 1;
-}
-
-static bool is_relative(char *path) {
-  // printf("first char: %c\n", path[0]);
-  if (path[0] == '/') return false;
-  else return true;
-}
-
-// static bool is_root(struct dir *dir) {
-//   struct dir *root = 
-// }
-
-struct dir *get_dir_from_path(char *path) {
-
-  ASSERT (path != NULL);
-
-  struct thread *t = thread_current();
-  struct dir *cur_dir;
-  struct inode *next = NULL;
-  char part[NAME_MAX + 1];
-
-  // char **saved_path = malloc(sizeof(path));
-  // char *saved_path = (char *) malloc((strlen(path) + 1) * sizeof(char));
-  const char *saved_path = path;
-  // saved_path = "t";
-  // char *saved_path = "";
-  printf("path: %s\n", path);
-  // printf("%d\n", strlcpy(saved_path, path, strlen(path)));
-  printf("strlen path: %d\n", strlen(path));
-  
-  printf("saved_path address: %x\n", saved_path);
-  printf("saved_path: %s\n", saved_path);
-  
-  // Check if path is relative or absolute.
-  if (is_relative(path)) cur_dir = dir_reopen(t->cwd);
-  else cur_dir = dir_open_root();
-  
-  // printf("test\n");
-  
-
-  // Iterate through path and find subdirectories.
-  // NOTE: Case where get_next_part returns -1.
-  
-  while (get_next_part(part, &saved_path)) {
-    printf("in while loop\n");
-    printf("part is: %s\n", part);
-    printf("saved_path address is %x\n", saved_path);
-    if (dir_lookup(cur_dir, saved_path, &next)) {
-      // Check if result is a directory.
-
-      if (next == NULL) return NULL;
-      // if (!inode_is_dir(next)) return NULL;
-      printf("dir_lookup success\n");
-      cur_dir = dir_open(next);
-    }
-    else {
-      // free(saved_path);
-      printf("dir_lookup fail\n");
-      return NULL;
-    }
-  }
-  // free(saved_path);
-  return cur_dir;
-  // NOTE: We should close our opened directories after use.
-}
-
-// struct file *get_file_from_path(char *path) {
-//   struct thread *t = thread_current();
-//   struct dir *cur_dir;
-//   struct inode *next;
-//   char part[NAME_MAX + 1];
-  
-//   // Check if path is relative or absolute.
-//   if (is_relative(path)) cur_dir = t->cwd;
-//   else cur_dir = dir_open_root();
-
-//   // Iterate through path and find subdirectories.
-//   // NOTE: Case where get_next_part returns -1.
-//   while (get_next_part(part, &path)) {
-//     if (part == path) {
-//       if (*next->data.is_dir != 0) return NULL;
-
-//     }
-//     if (dir_lookup(cur_dir, path, &next)) {
-//       // Check if result is a directory.
-//       if (*next->data.is_dir != 1) return NULL;
-      
-//       cur_dir = dir_open(next);
-//     }
-//     else {
-//       return NULL;
-//     }
-//   }
-//   return cur_dir;
-//   // NOTE: Do we need to close opened files?
-// }
