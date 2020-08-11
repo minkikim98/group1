@@ -5,6 +5,7 @@
 #include "devices/ide.h"
 #include "threads/malloc.h"
 #include "threads/synch.h"
+#include "threads/interrupt.h"
 
 /* A buffer cache entry struct. */
 struct buffer_entry {
@@ -87,12 +88,27 @@ int acquire_buffer_entry_lock(block_sector_t sector) {
 	for (i = 0; i < 64; i ++) {
 		if (buffer_cache[i]->buffered_sector == sector) {
 			lock_acquire(buffer_cache[i]->sector_lock);
+			buffer_cache[i]->use_bit = 1;
 			lock_release(buffer_cache_lock);
 			return i;
 		}
 	}
 	lock_release(buffer_cache_lock);
 	return -1;
+}
+
+/* Check if a sector is already cached.
+The caller has to acquire buffer_cache_lock first. */
+bool check_sector_cached(block_sector_t sector) {
+	ASSERT (lock_held_by_current_thread(buffer_cache_lock));
+	int i;
+	for (i = 0; i < 64; i ++) {
+		if (buffer_cache[i]->buffered_sector == sector) {
+			return true;
+		}
+	}
+	lock_release(buffer_cache_lock);
+	return false;
 }
 
 /* Check if the corresponding buffer entry is still present.
@@ -103,6 +119,7 @@ The caller must have acquired the lock on the buffer entry if present.
 As a result, we don't need to acquire buffer_cache_lock because if it's still
 present, it won't be evicted. */
 bool check_buffer_presence(block_sector_t sector, int offset) {
+	ASSERT (lock_held_by_current_thread(buffer_cache_lock));
 	if (buffer_cache[offset] == NULL) {
 		return false;
 	}
@@ -154,11 +171,216 @@ void flush_buffer_cache (void) {
   lock_release(buffer_cache_lock);
 }
 
-/* Evict a buffer entry with clock algorithm. */
+/* Evict a buffer entry with clock algorithm.
+The caller needs to make sure that there is at least 1
+empty or inactive buffer entry. */
 int clock_algorithm_evict(void) {
 	ASSERT (lock_held_by_current_thread(buffer_cache_lock));
-	return 0;
+	int offset;
+	while (true) {
+		if (buffer_cache[clock_hand] == NULL) {
+			offset = clock_hand;
+			clock_hand = (clock_hand + 1) % 64;
+			return offset;
+		} else {
+			if (lock_try_acquire(buffer_cache[clock_hand]->sector_lock)) {
+				if (buffer_cache[clock_hand]->use_bit == 1) {
+					buffer_cache[clock_hand]->use_bit = 0;
+					clock_hand = (clock_hand + 1) % 64;
+					lock_release(buffer_cache[clock_hand]->sector_lock);
+				} else {
+					buffer_evict(clock_hand);
+					offset = clock_hand;
+					clock_hand = (clock_hand + 1) % 64;
+					return offset;
+				}
+			} else {
+				clock_hand = (clock_hand + 1) % 64;
+			}
+		}
+	}
 }
+
+/* Read from cache_buffer to input_buffer, from start to end.
+src points to a sector. */
+void bounded_read(char *input_buffer, char *cache_buffer, off_t start, off_t end) {
+	cache_buffer = cache_buffer + start;
+	memcpy(input_buffer, cache_buffer, end - start);
+}
+
+/* Write from src to dest, from start to end.
+dest points to a sector. */
+void bounded_write(char *input_buffer, char *cache_buffer, off_t start, off_t end) {
+	cache_buffer = cache_buffer + start;
+	memcpy(cache_buffer, input_buffer, end - start);
+}
+
+/* Read buffered content from buffer cache.
+If not buffered, call read_not_buffered. */
+void read_buffered(struct block * block, block_sector_t sector , void * buffer, off_t start, off_t end) {
+	int offset = acquire_buffer_entry_lock(sector);
+	if (offset == -1) {
+		return read_not_buffered(block, sector , buffer, start, end);
+	}
+	struct buffer_entry *cur = buffer_cache[offset];
+	enum intr_level old_level;
+	old_level = intr_disable (); // We disable interrupt because if we can't sema down we need to release the sector_lock atomically.
+	while (!sema_try_down(active_sema)) {
+		lock_release(cur->sector_lock);
+		intr_set_level (old_level);
+
+		lock_acquire(inactive_lock);
+		cond_wait(inactive_entry, inactive_lock);
+		lock_release(inactive_lock);
+
+		offset = acquire_buffer_entry_lock(sector); // When we are waiting, the previous buffer entry could be evicted.
+		if (offset == -1 || !check_buffer_presence(sector, offset)) {
+			return read_not_buffered(block, sector , buffer, start, end);
+		}
+
+		old_level = intr_disable ();
+	}
+	intr_set_level (old_level); // We have acquire the lock and performed sema down to mark an active buffer entry.
+	bounded_read((char *) buffer, buffer_cache[offset]->buffer, start, end);
+
+	lock_release(buffer_cache[offset]->sector_lock);
+	sema_up(active_sema);
+	lock_acquire(inactive_lock);
+	cond_wait(inactive_entry, inactive_lock); // Signal all waiters that there is at least an inactive entry.
+	lock_release(inactive_lock);
+}
+
+/* Read from disk, load into buffer cache, and load into buffer. */
+void read_not_buffered(struct block * block , block_sector_t sector , void * buffer, off_t start, off_t end) {
+	lock_acquire(buffer_cache_lock);
+	if (check_sector_cached(sector)) {
+		return read_buffered(block, sector , buffer, start, end);
+	}
+	enum intr_level old_level;
+	old_level = intr_disable ();
+	while (!sema_try_down(active_sema)) {
+		lock_release(buffer_cache_lock);
+
+		intr_set_level (old_level);
+
+		lock_acquire(inactive_lock);
+		cond_wait(inactive_entry, inactive_lock);
+		lock_release(inactive_lock);
+
+		lock_acquire(buffer_cache_lock);
+		if (check_sector_cached(sector)) {
+			return read_buffered(block, sector , buffer, start, end);
+		}
+
+		old_level = intr_disable ();
+	}
+	intr_set_level (old_level);
+	struct buffer_entry *cur = malloc(sizeof(struct buffer_entry));
+	cur->buffered_sector = sector;
+	cur->sector_block = block;
+	cur->use_bit = 1;
+	cur->dirty_bit = 0;
+	lock_init(cur->sector_lock);
+	block_read(block, sector, cur->buffer);
+
+	int offset = clock_algorithm_evict();
+	ASSERT (buffer_cache[offset] == NULL);
+
+	bounded_read((char *) buffer, cur->buffer, start, end);
+
+	buffer_cache[offset] = cur;
+
+	lock_release(buffer_cache_lock);
+	sema_up(active_sema);
+	lock_acquire(inactive_lock);
+	cond_wait(inactive_entry, inactive_lock); // Signal all waiters that there is at least an inactive entry.
+	lock_release(inactive_lock);
+}
+
+
+/* Write from buffered content to buffer cache.
+If not buffered, call write_not_buffered. */
+void write_buffered(struct block * block, block_sector_t sector , void * buffer, off_t start, off_t end) {
+	int offset = acquire_buffer_entry_lock(sector);
+	if (offset == -1) {
+		return write_not_buffered(block, sector , buffer, start, end);
+	}
+	struct buffer_entry *cur = buffer_cache[offset];
+	enum intr_level old_level;
+	old_level = intr_disable (); // We disable interrupt because if we can't sema down we need to release the sector_lock atomically.
+	while (!sema_try_down(active_sema)) {
+		lock_release(cur->sector_lock);
+		intr_set_level (old_level);
+
+		lock_acquire(inactive_lock);
+		cond_wait(inactive_entry, inactive_lock);
+		lock_release(inactive_lock);
+
+		offset = acquire_buffer_entry_lock(sector); // When we are waiting, the previous buffer entry could be evicted.
+		if (offset == -1 || !check_buffer_presence(sector, offset)) {
+			return write_not_buffered(block, sector , buffer, start, end);
+		}
+
+		old_level = intr_disable ();
+	}
+	intr_set_level (old_level); // We have acquire the lock and performed sema down to mark an active buffer entry.
+	bounded_write((char *) buffer, buffer_cache[offset]->buffer, start, end);
+	buffer_cache[offset]->dirty_bit = 1;
+
+	lock_release(buffer_cache[offset]->sector_lock);
+	sema_up(active_sema);
+	lock_acquire(inactive_lock);
+	cond_wait(inactive_entry, inactive_lock); // Signal all waiters that there is at least an inactive entry.
+	lock_release(inactive_lock);
+}
+
+/* Read from disk, load into buffer cache, and write from buffer to buffer entry. */
+void write_not_buffered(struct block * block , block_sector_t sector , void * buffer, off_t start, off_t end) {
+	lock_acquire(buffer_cache_lock);
+	if (check_sector_cached(sector)) {
+		return write_buffered(block, sector , buffer, start, end);
+	}
+	enum intr_level old_level;
+	old_level = intr_disable ();
+	while (!sema_try_down(active_sema)) {
+		lock_release(buffer_cache_lock);
+
+		intr_set_level (old_level);
+
+		lock_acquire(inactive_lock);
+		cond_wait(inactive_entry, inactive_lock);
+		lock_release(inactive_lock);
+
+		lock_acquire(buffer_cache_lock);
+		if (check_sector_cached(sector)) {
+			return write_buffered(block, sector , buffer, start, end);
+		}
+
+		old_level = intr_disable ();
+	}
+	intr_set_level (old_level);
+	struct buffer_entry *cur = malloc(sizeof(struct buffer_entry));
+	cur->buffered_sector = sector;
+	cur->sector_block = block;
+	cur->use_bit = 1;
+	cur->dirty_bit = 1;
+	lock_init(cur->sector_lock);
+	block_read(block, sector, cur->buffer);
+
+	int offset = clock_algorithm_evict();
+	ASSERT (buffer_cache[offset] == NULL);
+
+	bounded_write(buffer, cur->buffer, start, end);
+
+	buffer_cache[offset] = cur;
+
+	lock_release(buffer_cache_lock);
+	sema_up(active_sema);
+	lock_acquire(inactive_lock);
+	cond_wait(inactive_entry, inactive_lock); // Signal all waiters that there is at least an inactive entry.
+	lock_release(inactive_lock);
+}
+
 
 /* Returns the block device fulfilling the given ROLE, or a null
    pointer if no block device has been assigned that role. */
