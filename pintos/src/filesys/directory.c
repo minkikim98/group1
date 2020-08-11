@@ -351,6 +351,8 @@ struct dir *get_dir_from_path(char *path) {
   }
 }
 
+/* Opens the inode the path is referring to, whether file or directory. 
+   Assumes callee closes inode. */
 struct inode *get_inode_from_path(char *path) {
 
   ASSERT (path != NULL);
@@ -393,7 +395,7 @@ struct inode *get_inode_from_path(char *path) {
   }
 }
 
-/* Returns the subdirectory of the path. For example, returns "a/b/c" on an input of "a/b/c/d" */
+/* Returns the subdirectory of the path. For example, returns "a/b/c/" on an input of "a/b/c/d" */
 struct dir *get_subdir_from_path(char *path) {
   int path_len = strlen(path);
   char copy[PATH_MAX + 1];
@@ -411,6 +413,28 @@ struct dir *get_subdir_from_path(char *path) {
   }
   copy[path_len] = '\0';
   return get_dir_from_path(copy);
+}
+
+/* Creates a subdirectory with name "name" inside parent directory "parent". 
+   The subdirectory has the . and .. entries appended to it.
+   This code was derived from filesys_create in filesys.c. */
+
+bool subdir_create(char *name, struct dir *parent) {
+  block_sector_t inode_sector = 0;
+  bool success = (parent != NULL
+                  && free_map_allocate (1, &inode_sector)
+                  && inode_create (inode_sector, 2 * sizeof (struct dir_entry))
+                  && dir_add (parent, name, inode_sector));
+  if (!success && inode_sector != 0)
+    free_map_release (inode_sector, 1);
+  // dir_close (parent);
+
+  // Need to set the is_dir flag.
+  // Need to add . and .. entries. 
+
+  struct inode *temp = NULL;
+  dir_lookup(parent, name, &temp);
+  return success;
 }
 
 /* End Segment */
