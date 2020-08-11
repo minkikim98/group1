@@ -94,19 +94,17 @@ static bool can_allocate (size_t num)
 static block_sector_t read_sector (block_sector_t sector, int index)
 {
   ASSERT (sector);
-  uint8_t buffer[BLOCK_SECTOR_SIZE];
-  read_buffered (fs_device, sector, buffer, 0, BLOCK_SECTOR_SIZE);
-  return ((block_sector_t*) buffer)[index];
+  uint8_t buffer[sizeof(block_sector_t)];
+  read_buffered (fs_device, sector, buffer, index * sizeof(int), index * sizeof(int) + sizeof(block_sector_t));
+  return ((block_sector_t*) buffer)[0];
 }
 
 static void write_sector (block_sector_t sector, int index, block_sector_t good_stuff)
 {
   ASSERT (sector);
-  uint8_t buffer[BLOCK_SECTOR_SIZE];
-  read_buffered (fs_device, sector, buffer, 0, BLOCK_SECTOR_SIZE);
-  ASSERT (((block_sector_t*) buffer)[index] == 0);
-  ((block_sector_t*) buffer)[index] = good_stuff;
-  write_buffered (fs_device, sector, buffer, 0, BLOCK_SECTOR_SIZE);
+  uint8_t buffer[sizeof(block_sector_t)];
+  ((block_sector_t*) buffer)[0] = good_stuff;
+  write_buffered (fs_device, sector, buffer, index * sizeof(int), index * sizeof(int) + sizeof(block_sector_t));
 }
 
 #define Indirect_Block (BLOCK_SECTOR_SIZE / 4)
