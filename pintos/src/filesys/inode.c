@@ -573,6 +573,7 @@ inode_write_at (struct inode *inode, const void *buffer_, off_t size,
   lock (inode);
   uint8_t *buffer = buffer_;
   off_t bytes_written = 0;
+  bool s = inode_extend_to_bytes (&inode->data, offset+size);
   if (inode->deny_write_cnt)
   {
     rel (inode);
