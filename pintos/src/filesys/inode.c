@@ -19,7 +19,7 @@
 struct inode_disk
   {
     off_t length;
-    uint32_t isdir;
+    uint32_t is_dir;
     block_sector_t direct_ptrs[NUM_DIRECT_PTRS];
     block_sector_t single_ptr;
     block_sector_t double_ptr;
@@ -631,4 +631,11 @@ inode_length (const struct inode *inode)
   ASSERT (inode);
   // printf ("Getting length: %d\n", inode->data.length);
   return inode->data.length;
+}
+
+/* Project 3 Task 3 */
+
+bool inode_is_dir(const struct inode *inode) {
+  if (inode->data.is_dir == 1) return true;
+  else return false;
 }
