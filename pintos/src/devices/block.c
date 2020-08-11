@@ -145,7 +145,9 @@ void buffer_evict(int offset) {
   struct buffer_entry *cur = buffer_cache[offset];
 	ASSERT (lock_held_by_current_thread(&cur->sector_lock));
 
-  block_write(cur->sector_block, cur->buffered_sector, cur->buffer);
+	if (cur->dirty_bit) {
+  	block_write(cur->sector_block, cur->buffered_sector, cur->buffer);
+	}
   buffer_cache[offset] = NULL;
 	lock_release(&cur->sector_lock);
 	free(cur->buffer);

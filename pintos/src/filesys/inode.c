@@ -66,7 +66,7 @@ static bool get_sector (block_sector_t *sector)
 {
   bool b = free_map_allocate (1, sector);
   if (!b) return false;
-  block_write (fs_device, *sector, zero_block);
+  write_buffered (fs_device, *sector, zero_block, 0, BLOCK_SECTOR_SIZE);
   return true;
 }
 
@@ -95,7 +95,7 @@ static block_sector_t read_sector (block_sector_t sector, int index)
 {
   ASSERT (sector);
   uint8_t buffer[BLOCK_SECTOR_SIZE];
-  block_read (fs_device, sector, buffer);
+  read_buffered (fs_device, sector, buffer, 0, BLOCK_SECTOR_SIZE);
   return ((block_sector_t*) buffer)[index];
 }
 
@@ -103,10 +103,10 @@ static void write_sector (block_sector_t sector, int index, block_sector_t good_
 {
   ASSERT (sector);
   uint8_t buffer[BLOCK_SECTOR_SIZE];
-  block_read (fs_device, sector, buffer);
+  read_buffered (fs_device, sector, buffer, 0, BLOCK_SECTOR_SIZE);
   ASSERT (((block_sector_t*) buffer)[index] == 0);
   ((block_sector_t*) buffer)[index] = good_stuff;
-  block_write (fs_device, sector, buffer);
+  write_buffered (fs_device, sector, buffer, 0, BLOCK_SECTOR_SIZE);
 }
 
 #define Indirect_Block (BLOCK_SECTOR_SIZE / 4)
@@ -116,7 +116,7 @@ static void install_sector (struct inode_disk *disk_inode, int i)
   ASSERT (i < NUM_DIRECT_PTRS + BLOCK_SECTOR_SIZE / 4 * (1 + BLOCK_SECTOR_SIZE / 4));
   block_sector_t sec;
   ASSERT (get_sector (&sec));
-  block_write (fs_device, sec, zero_block);
+  write_buffered (fs_device, sec, zero_block, 0, BLOCK_SECTOR_SIZE);
   if (i < NUM_DIRECT_PTRS)
   {
     disk_inode->direct_ptrs[i] = sec;
@@ -207,7 +207,7 @@ static bool inode_extend_start (struct inode_disk *disk_inode, int sector, size_
   {
     install_sector (disk_inode, i);
   }
-  block_write (fs_device, sector, disk_inode);
+  write_buffered (fs_device, sector, disk_inode, 0, BLOCK_SECTOR_SIZE);
   return true;
 }
 
@@ -344,7 +344,7 @@ inode_open (block_sector_t sector)
   inode->deny_write_cnt = 0;
   inode->removed = false;
   lock_init (&inode->inode_lock);
-  block_read (fs_device, inode->sector, &inode->data);
+  read_buffered (fs_device, inode->sector, &inode->data, 0, BLOCK_SECTOR_SIZE);
   //printf ("Opening a file, return\n");
   return inode;
 }
@@ -446,7 +446,7 @@ inode_close (struct inode *inode)
   lock_release (&inode->inode_lock);
   if (should_free)
   {
-    block_write (fs_device, inode->sector, &inode->data);
+    write_buffered (fs_device, inode->sector, &inode->data, 0, BLOCK_SECTOR_SIZE);
     free (inode);
     //printf ("Freed %04x\n", inode);
   }
@@ -573,6 +573,11 @@ inode_write_at (struct inode *inode, const void *buffer_, off_t size,
   lock (inode);
   uint8_t *buffer = buffer_;
   off_t bytes_written = 0;
+  if (inode->deny_write_cnt)
+  {
+    rel (inode);
+    return 0;
+  }
   while (size > 0)
     {
       /* Disk sector to read, starting byte offset within sector. */
