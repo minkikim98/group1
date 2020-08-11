@@ -432,12 +432,21 @@ syscall_handler (struct intr_frame *f UNUSED)
       return;
     }
 
+    if (file_name == "/") {
+      f->eax;
+      return;
+    }
+
     // If inode already exists, return false.
-    if (get_dir_from_path(file_name) != NULL) {
+    if (get_inode_from_path(file_name) != NULL) {
       f->eax = 0;
       return;
     }
-    
+
+    // Get the directory the inode should be in.
+    if (get_subdir_from_path(file_name) != NULL) {
+      
+    }
   }
   
   if (args[0] == SYS_READDIR) {

@@ -22,6 +22,17 @@ struct dir_entry
     bool in_use;                        /* In use or free? */
   };
 
+/* Project 3 Task 3 Segment */
+// static void get_dir_lock(struct dir *dir) {
+//   struct inode *inode = dir->inode;
+//   lock_acquire(inode->inode_dir_lock);
+// }
+
+// static void rel_dir_lock(struct dir *dir) {
+//   lock_release(dir->inode->inode_dir_lock);
+// }
+/* End Segment */
+
 /* Creates a directory with space for ENTRY_CNT entries in the
    given SECTOR.  Returns true if successful, false on failure. */
 bool
@@ -99,6 +110,8 @@ lookup (const struct dir *dir, const char *name,
   ASSERT (dir != NULL);
   ASSERT (name != NULL);
 
+  get_dir_lock(dir->inode);
+
   for (ofs = 0; inode_read_at (dir->inode, &e, sizeof e, ofs) == sizeof e;
        ofs += sizeof e)
     if (e.in_use && !strcmp (name, e.name))
@@ -109,6 +122,8 @@ lookup (const struct dir *dir, const char *name,
           *ofsp = ofs;
         return true;
       }
+  
+  release_dir_lock(dir->inode);
   return false;
 }
 
@@ -238,11 +253,12 @@ dir_readdir (struct dir *dir, char name[NAME_MAX + 1])
   return false;
 }
 
-/* Project 3 Task 3 */
+/* Project 3 Task 3 Segment */
 
 /* Extracts a file name part from *SRCP into PART, and updates *SRCP so that the
    next call will return the next file name part. Returns 1 if successful, 0 at
    end of string, -1 for a too-long file name part. */
+
 static int
 get_next_part (char part[NAME_MAX + 1], const char **srcp) {
   // printf("in get_next_part\n");
@@ -269,23 +285,25 @@ get_next_part (char part[NAME_MAX + 1], const char **srcp) {
 
 /* Checks to see if *SRCP is about to read the last part. 
    Reverts *SRCP to original state afterwards. */
-// static bool is_last_part(const char **srcp) {
-//   const char *saved = *srcp;
-//   char part[NAME_MAX + 1];
-//   int status;
 
-//   get_next_part(part, srcp);
-//   status = get_next_part(part, srcp);
-//   *srcp = saved;
-//   if (status == 0) return true;
-//   else return false;
-// }
+static bool is_last_part(const char **srcp) {
+  const char *saved = *srcp;
+  char part[NAME_MAX + 1];
+  int status;
+
+  get_next_part(part, srcp);
+  status = get_next_part(part, srcp);
+  *srcp = saved;
+  if (status == 0) return true;
+  else return false;
+}
 
 static bool is_relative(char *path) {
-  if (path[0] == '/') return false;
+  if (*path == '/') return false;
   else return true;
 }
 
+/* Opens the directory the path is referring to. Assumes callee closes directory. */
 struct dir *get_dir_from_path(char *path) {
 
   ASSERT (path != NULL);
@@ -296,6 +314,8 @@ struct dir *get_dir_from_path(char *path) {
   char part[NAME_MAX + 1];
 
   const char *saved_path = path;
+
+  if (path == "") return dir_reopen(t->cwd);
 
   // Check if path is relative or absolute.
   if (is_relative(path)) cur_dir = dir_reopen(t->cwd);
@@ -328,7 +348,6 @@ struct dir *get_dir_from_path(char *path) {
         return NULL;
       }
     }
-    
   }
 }
 
@@ -357,19 +376,13 @@ struct inode *get_inode_from_path(char *path) {
     }
     // Reached end of path successfully. 
     else if (status == 0) {
-      return cur_dir;
+      return next;
     }
     // Got part of the path successfully.
     else {
-      if (dir_lookup(cur_dir, saved_path, &next)) {
-        // if (is_last_part(&saved_path)) {
-          
-        // }
-
-        // Check if result is a directory.
-        if (!inode_is_dir(next)) return NULL;
-
+      if (cur_dir != NULL && dir_lookup(cur_dir, saved_path, &next)) {
         dir_close(cur_dir);
+        // If next was not a directory, our next iteration will check if cur_dir was set to NULL.
         cur_dir = dir_open(next);
       }
       // Couldn't find next part of path in directory. Return NULL.
@@ -377,37 +390,27 @@ struct inode *get_inode_from_path(char *path) {
         return NULL;
       }
     }
-    
   }
 }
 
-// struct file *get_file_from_path(char *path) {
-//   struct thread *t = thread_current();
-//   struct dir *cur_dir;
-//   struct inode *next;
-//   char part[NAME_MAX + 1];
-  
-//   // Check if path is relative or absolute.
-//   if (is_relative(path)) cur_dir = t->cwd;
-//   else cur_dir = dir_open_root();
+/* Returns the subdirectory of the path. For example, returns "a/b/c" on an input of "a/b/c/d" */
+struct dir *get_subdir_from_path(char *path) {
+  int path_len = strlen(path);
+  char copy[PATH_MAX + 1];
+  strlcpy(copy, path, path_len);
 
-//   // Iterate through path and find subdirectories.
-//   // NOTE: Case where get_next_part returns -1.
-//   while (get_next_part(part, &path)) {
-//     if (part == path) {
-//       if (*next->data.is_dir != 0) return NULL;
+  char *end = copy + path_len - 1;
 
-//     }
-//     if (dir_lookup(cur_dir, path, &next)) {
-//       // Check if result is a directory.
-//       if (*next->data.is_dir != 1) return NULL;
-      
-//       cur_dir = dir_open(next);
-//     }
-//     else {
-//       return NULL;
-//     }
-//   }
-//   return cur_dir;
-//   // NOTE: Do we need to close opened files?
-// }
+  while (*end == '/') {
+    end--;
+    path_len--;
+  }
+  while (*end != '/') {
+    end--;
+    path_len--;
+  }
+  copy[path_len] = '\0';
+  return get_dir_from_path(copy);
+}
+
+/* End Segment */

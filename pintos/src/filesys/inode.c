@@ -344,6 +344,10 @@ inode_open (block_sector_t sector)
   inode->deny_write_cnt = 0;
   inode->removed = false;
   lock_init (&inode->inode_lock);
+
+  /* Project 3 Task 3 */
+  lock_init (&inode->inode_dir_lock);
+
   block_read (fs_device, inode->sector, &inode->data);
   //printf ("Opening a file, return\n");
   return inode;
@@ -635,4 +639,12 @@ inode_length (const struct inode *inode)
 bool inode_is_dir(const struct inode *inode) {
   if (inode->data.is_dir == 1) return true;
   else return false;
+}
+
+void get_dir_lock(const struct inode *inode) {
+  lock_acquire(&inode->inode_dir_lock);
+}
+
+void release_dir_lock(const struct inode *inode) {
+  lock_release(&inode->inode_dir_lock);
 }
