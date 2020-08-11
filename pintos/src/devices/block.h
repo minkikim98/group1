@@ -51,16 +51,12 @@ void buffer_evict(int);
 void init_buffer_cache (void);
 void flush_buffer_cache (void);
 int clock_algorithm_evict(void);
-void bounded_read(char *input_buffer, char *cache_buffer, off_t start, off_t end);
-void bounded_write(char *input_buffer, char *cache_buffer, off_t start, off_t end);
+void bounded_read(uint8_t *input_buffer, uint8_t *cache_buffer, off_t start, off_t end);
+void bounded_write(uint8_t *input_buffer, uint8_t *cache_buffer, off_t start, off_t end);
 void read_buffered(struct block *, block_sector_t, void *, off_t start, off_t end);
 void read_not_buffered(struct block *, block_sector_t, void *, off_t start, off_t end);
 void write_buffered(struct block *, block_sector_t, void *, off_t start, off_t end);
 void write_not_buffered(struct block *, block_sector_t, void *, off_t start, off_t end);
-//void buffer_read_block (struct block *, block_sector_t, void *, off_t start, off_t end);
-//void buffer_write_block (struct block *, block_sector_t, void *, off_t start, off_t end);
-void buffer_read (struct block * block, block_sector_t sector, void *buffer_, off_t size, off_t offset);
-void buffer_write (struct block * block, block_sector_t sector, void *buffer_, off_t size, off_t offset);
 
 /* Finding block devices. */
 struct block *block_get_role (enum block_type);
