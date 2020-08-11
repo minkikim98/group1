@@ -109,8 +109,9 @@ lookup (const struct dir *dir, const char *name,
 
   ASSERT (dir != NULL);
   ASSERT (name != NULL);
-
-  get_dir_lock(dir->inode);
+  
+  // printf("test\n");
+  // get_dir_lock(dir->inode);
 
   for (ofs = 0; inode_read_at (dir->inode, &e, sizeof e, ofs) == sizeof e;
        ofs += sizeof e)
@@ -122,8 +123,10 @@ lookup (const struct dir *dir, const char *name,
           *ofsp = ofs;
         return true;
       }
-  
-  release_dir_lock(dir->inode);
+
+  // release_dir_lock(dir->inode);
+  // printf("test end\n");
+
   return false;
 }
 
@@ -142,10 +145,16 @@ dir_lookup (const struct dir *dir, const char *name,
   ASSERT (dir != NULL);
   ASSERT (name != NULL);
 
+  // printf("test\n");
+  get_dir_lock(dir->inode);
+
   if (lookup (dir, name, &e, NULL))
     *inode = inode_open (e.inode_sector);
   else
     *inode = NULL;
+
+  release_dir_lock(dir->inode);
+  // printf("test end\n");
 
   return *inode != NULL;
 }
@@ -182,21 +191,21 @@ dir_add (struct dir *dir, const char *name, block_sector_t inode_sector)
      Otherwise, we'd need to verify that we didn't get a short
      read due to something intermittent such as low memory. */
 
-  get_dir_lock(dir->inode);
+  // get_dir_lock(dir->inode);
   for (ofs = 0; inode_read_at (dir->inode, &e, sizeof e, ofs) == sizeof e;
        ofs += sizeof e)
     if (!e.in_use)
       break;
-  release_dir_lock(dir->inode);
+  // release_dir_lock(dir->inode);
 
   /* Write slot. */
   e.in_use = true;
   strlcpy (e.name, name, sizeof e.name);
   e.inode_sector = inode_sector;
 
-  get_dir_lock(dir->inode);
+  // get_dir_lock(dir->inode);
   success = inode_write_at (dir->inode, &e, sizeof e, ofs) == sizeof e;
-  release_dir_lock(dir->inode);
+  // release_dir_lock(dir->inode);
 
  done:
   return success;
@@ -366,7 +375,7 @@ struct dir *get_dir_from_path(char *path) {
 
 /* Opens the inode the path is referring to, whether file or directory. 
    Assumes callee closes inode. */
-struct inode *get_inode_from_path(char *path) {
+struct inode *get_inode_from_path(char *path) { 
 
   ASSERT (path != NULL);
 
@@ -451,6 +460,8 @@ bool subdir_create(char *name, struct dir *parent) {
   struct inode *temp = NULL;
   if (dir_lookup(parent, name, &temp)) {
     inode_set_dir(temp);
+  } else {
+    success = false;
   }
     
   return success;

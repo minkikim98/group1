@@ -21,4 +21,10 @@ void inode_allow_write (struct inode *);
 off_t inode_length (const struct inode *);
 bool inode_is_dir(const struct inode *);
 
+/* Project 3 Task 3 */
+bool inode_is_dir(const struct inode *);
+void get_dir_lock(const struct inode *);
+void release_dir_lock(const struct inode *);
+void inode_set_dir(struct inode *);
+
 #endif /* filesys/inode.h */

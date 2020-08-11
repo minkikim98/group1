@@ -437,7 +437,7 @@ syscall_handler (struct intr_frame *f UNUSED)
 
     // If name is '/', return false.
     if (file_name == "/") {
-      f->eax;
+      f->eax = 0;
       return;
     }
 
@@ -453,7 +453,7 @@ syscall_handler (struct intr_frame *f UNUSED)
       f->eax = 0;
       return;
     }
-    subdir_create(file_name, subdir);
+    // subdir_create(file_name, subdir);
   }
   
   if (args[0] == SYS_READDIR) {

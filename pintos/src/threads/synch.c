@@ -192,6 +192,7 @@ lock_init (struct lock *lock)
 void
 lock_acquire (struct lock *lock)
 {
+  // printf("thread holding lock: %s\n", lock->holder->name);
   ASSERT (lock != NULL);
   ASSERT (!intr_context ());
   ASSERT (!lock_held_by_current_thread (lock));
