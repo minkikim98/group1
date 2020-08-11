@@ -120,8 +120,8 @@ bool
 dir_lookup (const struct dir *dir, const char *name,
             struct inode **inode)
 {
-  printf("dir is: %x\n", dir);
-  printf("name is: %s\n", name);
+  // printf("dir is: %x\n", dir);
+  // printf("name is: %s\n", name);
   struct dir_entry e;
 
   ASSERT (dir != NULL);
@@ -267,15 +267,24 @@ get_next_part (char part[NAME_MAX + 1], const char **srcp) {
   return 1;
 }
 
+/* Checks to see if *SRCP is about to read the last part. 
+   Reverts *SRCP to original state afterwards. */
+// static bool is_last_part(const char **srcp) {
+//   const char *saved = *srcp;
+//   char part[NAME_MAX + 1];
+//   int status;
+
+//   get_next_part(part, srcp);
+//   status = get_next_part(part, srcp);
+//   *srcp = saved;
+//   if (status == 0) return true;
+//   else return false;
+// }
+
 static bool is_relative(char *path) {
-  // printf("first char: %c\n", path[0]);
   if (path[0] == '/') return false;
   else return true;
 }
-
-// static bool is_root(struct dir *dir) {
-//   struct dir *root = 
-// }
 
 struct dir *get_dir_from_path(char *path) {
 
@@ -286,49 +295,90 @@ struct dir *get_dir_from_path(char *path) {
   struct inode *next = NULL;
   char part[NAME_MAX + 1];
 
-  // char **saved_path = malloc(sizeof(path));
-  // char *saved_path = (char *) malloc((strlen(path) + 1) * sizeof(char));
   const char *saved_path = path;
-  // saved_path = "t";
-  // char *saved_path = "";
-  printf("path: %s\n", path);
-  // printf("%d\n", strlcpy(saved_path, path, strlen(path)));
-  printf("strlen path: %d\n", strlen(path));
-  
-  printf("saved_path address: %x\n", saved_path);
-  printf("saved_path: %s\n", saved_path);
-  
+
   // Check if path is relative or absolute.
   if (is_relative(path)) cur_dir = dir_reopen(t->cwd);
-  else cur_dir = dir_open_root();
-  
-  // printf("test\n");
-  
+  else cur_dir = dir_open_root();  
 
   // Iterate through path and find subdirectories.
-  // NOTE: Case where get_next_part returns -1.
   
-  while (get_next_part(part, &saved_path)) {
-    printf("in while loop\n");
-    printf("part is: %s\n", part);
-    printf("saved_path address is %x\n", saved_path);
-    if (dir_lookup(cur_dir, saved_path, &next)) {
-      // Check if result is a directory.
-
-      if (next == NULL) return NULL;
-      // if (!inode_is_dir(next)) return NULL;
-      printf("dir_lookup success\n");
-      cur_dir = dir_open(next);
-    }
-    else {
-      // free(saved_path);
-      printf("dir_lookup fail\n");
+  int status = 0;
+  while (1) {
+    status = get_next_part(part, &saved_path);
+    // Name length was too long.
+    if (status == -1) {
       return NULL;
     }
+    // Reached end of path successfully. 
+    else if (status == 0) {
+      return cur_dir;
+    }
+    // Got part of the path successfully.
+    else {
+      if (dir_lookup(cur_dir, saved_path, &next)) {
+        // Check if result is a directory.
+        if (!inode_is_dir(next)) return NULL;
+
+        dir_close(cur_dir);
+        cur_dir = dir_open(next);
+      }
+      // Couldn't find next part of path in directory. Return NULL.
+      else {
+        return NULL;
+      }
+    }
+    
   }
-  // free(saved_path);
-  return cur_dir;
-  // NOTE: We should close our opened directories after use.
+}
+
+struct inode *get_inode_from_path(char *path) {
+
+  ASSERT (path != NULL);
+
+  struct thread *t = thread_current();
+  struct dir *cur_dir;
+  struct inode *next = NULL;
+  char part[NAME_MAX + 1];
+
+  const char *saved_path = path;
+
+  // Check if path is relative or absolute.
+  if (is_relative(path)) cur_dir = dir_reopen(t->cwd);
+  else cur_dir = dir_open_root();  
+
+  // Iterate through path and find subdirectories.
+  int status = 0;
+  while (1) {
+    status = get_next_part(part, &saved_path);
+    // Name length was too long.
+    if (status == -1) {
+      return NULL;
+    }
+    // Reached end of path successfully. 
+    else if (status == 0) {
+      return cur_dir;
+    }
+    // Got part of the path successfully.
+    else {
+      if (dir_lookup(cur_dir, saved_path, &next)) {
+        // if (is_last_part(&saved_path)) {
+          
+        // }
+
+        // Check if result is a directory.
+        if (!inode_is_dir(next)) return NULL;
+
+        dir_close(cur_dir);
+        cur_dir = dir_open(next);
+      }
+      // Couldn't find next part of path in directory. Return NULL.
+      else {
+        return NULL;
+      }
+    }
+    
+  }
 }
 
 // struct file *get_file_from_path(char *path) {

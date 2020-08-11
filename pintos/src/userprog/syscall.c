@@ -128,7 +128,7 @@ syscall_handler (struct intr_frame *f UNUSED)
    */ 
   void exit_with_code(int exit_code) {
     cur->o_wait_status->o_exit_code = exit_code;
-    printf ("%s: exit(%d)\n", &cur->name, exit_code);
+    printf ("%s: exit(%d)\n", (char *) &cur->name, exit_code);
     thread_exit();
   }
   void exit_error(void) {
@@ -426,9 +426,18 @@ syscall_handler (struct intr_frame *f UNUSED)
     char file_name[n];
     memcpy((char *)file_name, (char *)args[1], n + 1);
 
-    // If dir already exists, 
-    if (get_dir_from_path(file_name) != NULL) f->eax = 0;
+    // If name is empty, return false.
+    if (strlen(file_name) == 0) {
+      f->eax = 0;
+      return;
+    }
 
+    // If inode already exists, return false.
+    if (get_dir_from_path(file_name) != NULL) {
+      f->eax = 0;
+      return;
+    }
+    
   }
   
   if (args[0] == SYS_READDIR) {
@@ -450,22 +459,22 @@ syscall_handler (struct intr_frame *f UNUSED)
    According to Sam, the inumber of a file is the disk address (block_sector_t) of its inode. */
 
   if (args[0] == SYS_INUMBER) {
-    exit_if_bad_arg(1);
-    /* Check if &args[1] is valid.*/
-    if (!is_valid((void *)args + 1, cur)) {
-        exit_with_code(-1);
-    }
-    /* Check if args[1] is valid and is not a null pointer. */
-    if (!is_valid((void *)args[1], cur) || args[1] == 0) {
-        exit_with_code(-1);
-    }
-    int fd_to_find = args[1];
-    struct file * list_of_fds = cur->file_descriptors;
-    struct file * file_associated_with_fd = list_of_fds[fd_to_find];
-    struct inode * inode = file_associated_with_fd->inode;
-    block_sector_t inode_number = inode->sector;
-    f->eax = (uint32_t) inode_number;
-    return;
+    // exit_if_bad_arg(1);
+    // /* Check if &args[1] is valid.*/
+    // if (!is_valid((void *)args + 1, cur)) {
+    //     exit_with_code(-1);
+    // }
+    // /* Check if args[1] is valid and is not a null pointer. */
+    // if (!is_valid((void *)args[1], cur) || args[1] == 0) {
+    //     exit_with_code(-1);
+    // }
+    // int fd_to_find = args[1];
+    // struct file * list_of_fds = cur->file_descriptors;
+    // struct file * file_associated_with_fd = list_of_fds[fd_to_find];
+    // struct inode * inode = file_associated_with_fd->inode;
+    // block_sector_t inode_number = inode->sector;
+    // f->eax = (uint32_t) inode_number;
+    // return;
   }
 
     
