@@ -26,5 +26,6 @@ bool inode_is_dir(const struct inode *);
 void get_dir_lock(const struct inode *);
 void release_dir_lock(const struct inode *);
 void inode_set_dir(struct inode *);
+block_sector_t get_inode_sector(const struct inode*);
 
 #endif /* filesys/inode.h */

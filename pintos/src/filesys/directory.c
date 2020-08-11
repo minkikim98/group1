@@ -146,14 +146,14 @@ dir_lookup (const struct dir *dir, const char *name,
   ASSERT (name != NULL);
 
   // printf("test\n");
-  get_dir_lock(dir->inode);
+  // get_dir_lock(dir->inode);
 
   if (lookup (dir, name, &e, NULL))
     *inode = inode_open (e.inode_sector);
   else
     *inode = NULL;
 
-  release_dir_lock(dir->inode);
+  // release_dir_lock(dir->inode);
   // printf("test end\n");
 
   return *inode != NULL;
@@ -452,18 +452,23 @@ bool subdir_create(char *name, struct dir *parent) {
                   && dir_add (parent, name, inode_sector));
   if (!success && inode_sector != 0)
     free_map_release (inode_sector, 1);
-  // dir_close (parent);
-
   
+
+  printf("test2\n");
   // Need to add . and .. entries. 
 
-  struct inode *temp = NULL;
-  if (dir_lookup(parent, name, &temp)) {
-    inode_set_dir(temp);
+  struct inode *new = NULL;
+  if (dir_lookup(parent, name, &new)) {
+    inode_set_dir(new);
+    block_sector_t parent_sector = get_inode_sector(dir_get_inode(parent));
+    block_sector_t new_sector = get_inode_sector(new);
+    dir_add(new, ".", new_sector);
+    dir_add(new, "..", parent_sector);
+    inode_close(new);
   } else {
     success = false;
   }
-    
+  dir_close (parent);
   return success;
 }
 

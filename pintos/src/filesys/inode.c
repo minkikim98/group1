@@ -293,14 +293,14 @@ inode_create (block_sector_t sector, off_t length)
 
 static void lock (struct inode *inode)
 {
-  lock_acquire (&inode->inode_lock);
+  lock_acquire (&(inode->inode_lock));
   //printf ("%04x, acuire holder: %04x, count: %d\n", inode, inode->inode_lock.holder, inode->open_cnt);
 }
 
 static void rel (struct inode *inode)
 {
   //printf ("%04x, relesa holder: %04x, count: %d\n", inode, inode->inode_lock.holder, inode->open_cnt);
-  lock_release (&inode->inode_lock);
+  lock_release (&(inode->inode_lock));
 }
 
 /* Reads an inode from SECTOR
@@ -642,13 +642,17 @@ bool inode_is_dir(const struct inode *inode) {
 }
 
 void get_dir_lock(const struct inode *inode) {
-  lock_acquire(&inode->inode_dir_lock);
+  lock_acquire(&(inode->inode_dir_lock));
 }
 
 void release_dir_lock(const struct inode *inode) {
-  lock_release(&inode->inode_dir_lock);
+  lock_release(&(inode->inode_dir_lock));
 }
 
 void inode_set_dir(struct inode *inode) {
   inode->data.is_dir = 1;
+}
+
+block_sector_t get_inode_sector(const struct inode* inode) {
+  return inode->sector;
 }

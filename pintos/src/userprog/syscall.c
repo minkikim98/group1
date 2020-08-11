@@ -453,7 +453,8 @@ syscall_handler (struct intr_frame *f UNUSED)
       f->eax = 0;
       return;
     }
-    // subdir_create(file_name, subdir);
+    printf("test\n");
+    if (subdir_create(file_name, subdir)) printf("success\n");
   }
   
   if (args[0] == SYS_READDIR) {
