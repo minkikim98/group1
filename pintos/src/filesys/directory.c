@@ -181,16 +181,22 @@ dir_add (struct dir *dir, const char *name, block_sector_t inode_sector)
      inode_read_at() will only return a short read at end of file.
      Otherwise, we'd need to verify that we didn't get a short
      read due to something intermittent such as low memory. */
+
+  get_dir_lock(dir->inode);
   for (ofs = 0; inode_read_at (dir->inode, &e, sizeof e, ofs) == sizeof e;
        ofs += sizeof e)
     if (!e.in_use)
       break;
+  release_dir_lock(dir->inode);
 
   /* Write slot. */
   e.in_use = true;
   strlcpy (e.name, name, sizeof e.name);
   e.inode_sector = inode_sector;
+
+  get_dir_lock(dir->inode);
   success = inode_write_at (dir->inode, &e, sizeof e, ofs) == sizeof e;
+  release_dir_lock(dir->inode);
 
  done:
   return success;
@@ -221,6 +227,7 @@ dir_remove (struct dir *dir, const char *name)
 
   /* Erase directory entry. */
   e.in_use = false;
+  
   if (inode_write_at (dir->inode, &e, sizeof e, ofs) != sizeof e)
     goto done;
 
@@ -328,23 +335,29 @@ struct dir *get_dir_from_path(char *path) {
     status = get_next_part(part, &saved_path);
     // Name length was too long.
     if (status == -1) {
+      dir_close(cur_dir);
       return NULL;
     }
     // Reached end of path successfully. 
     else if (status == 0) {
+      dir_close(cur_dir);
       return cur_dir;
     }
     // Got part of the path successfully.
     else {
       if (dir_lookup(cur_dir, saved_path, &next)) {
         // Check if result is a directory.
-        if (!inode_is_dir(next)) return NULL;
+        if (!inode_is_dir(next)) {
+          inode_close(next);
+          return NULL;
+        }
 
         dir_close(cur_dir);
         cur_dir = dir_open(next);
       }
       // Couldn't find next part of path in directory. Return NULL.
       else {
+        dir_close(cur_dir);
         return NULL;
       }
     }
@@ -374,10 +387,12 @@ struct inode *get_inode_from_path(char *path) {
     status = get_next_part(part, &saved_path);
     // Name length was too long.
     if (status == -1) {
+      dir_close(cur_dir);
       return NULL;
     }
     // Reached end of path successfully. 
     else if (status == 0) {
+      dir_close(cur_dir);
       return next;
     }
     // Got part of the path successfully.
@@ -389,6 +404,7 @@ struct inode *get_inode_from_path(char *path) {
       }
       // Couldn't find next part of path in directory. Return NULL.
       else {
+        dir_close(cur_dir);
         return NULL;
       }
     }
@@ -429,11 +445,14 @@ bool subdir_create(char *name, struct dir *parent) {
     free_map_release (inode_sector, 1);
   // dir_close (parent);
 
-  // Need to set the is_dir flag.
+  
   // Need to add . and .. entries. 
 
   struct inode *temp = NULL;
-  dir_lookup(parent, name, &temp);
+  if (dir_lookup(parent, name, &temp)) {
+    inode_set_dir(temp);
+  }
+    
   return success;
 }
 

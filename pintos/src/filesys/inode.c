@@ -648,3 +648,7 @@ void get_dir_lock(const struct inode *inode) {
 void release_dir_lock(const struct inode *inode) {
   lock_release(&inode->inode_dir_lock);
 }
+
+void inode_set_dir(struct inode *inode) {
+  inode->data.is_dir = 1;
+}
