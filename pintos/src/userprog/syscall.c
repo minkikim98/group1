@@ -17,6 +17,9 @@
 #include "devices/shutdown.h"
 #include "userprog/pagedir.h"
 #include "userprog/process.h"
+#include "filesys/inode.h"
+// #include "filesys/inode.c"
+// #include "filesys/file.c"
 
 static void syscall_handler (struct intr_frame *);
 struct lock file_lock;
@@ -479,7 +482,7 @@ syscall_handler (struct intr_frame *f UNUSED)
     // }
     // int fd_to_find = args[1];
     // struct file * list_of_fds = cur->file_descriptors;
-    // struct file * file_associated_with_fd = list_of_fds[fd_to_find];
+    // struct file * file_associated_with_fd = &(list_of_fds[fd_to_find]);
     // struct inode * inode = file_associated_with_fd->inode;
     // block_sector_t inode_number = inode->sector;
     // f->eax = (uint32_t) inode_number;
