@@ -3,6 +3,8 @@
 
 #include <stddef.h>
 #include <inttypes.h>
+#include <stdbool.h>
+#include "filesys/off_t.h"
 
 /* Size of a block device sector in bytes.
    All IDE disks use this sector size, as do most USB and SCSI
@@ -40,6 +42,21 @@ enum block_type
   };
 
 const char *block_type_name (enum block_type);
+
+/* Project 3 Task 1. */
+int acquire_buffer_entry_lock(block_sector_t);
+bool check_buffer_presence(block_sector_t, int);
+bool check_sector_cached(block_sector_t);
+void buffer_evict(int);
+void init_buffer_cache (void);
+void flush_buffer_cache (void);
+int clock_algorithm_evict(void);
+void bounded_read(uint8_t *input_buffer, uint8_t *cache_buffer, off_t start, off_t end);
+void bounded_write(uint8_t *input_buffer, uint8_t *cache_buffer, off_t start, off_t end);
+void read_buffered(struct block *, block_sector_t, void *, off_t start, off_t end);
+void read_not_buffered(struct block *, block_sector_t, void *, off_t start, off_t end);
+void write_buffered(struct block *, block_sector_t, void *, off_t start, off_t end);
+void write_not_buffered(struct block *, block_sector_t, void *, off_t start, off_t end);
 
 /* Finding block devices. */
 struct block *block_get_role (enum block_type);

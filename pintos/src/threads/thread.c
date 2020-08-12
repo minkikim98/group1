@@ -308,19 +308,19 @@ thread_exit (void)
      and schedule another process.  That process will destroy us
      when it calls thread_schedule_tail(). */
   intr_disable ();
-  struct thread *cur = thread_current();
-  list_remove (&cur->allelem);
+  list_remove (&thread_current()->allelem);
+  struct thread *curThread = thread_current();
 
   // If this thread has any children,
-  while (list_size(&cur->o_children_wait_status_list) != 0)
+  while (list_size(&thread_current()->o_children_wait_status_list) != 0)
   {
     // Decrement the child's wait status struct reference count by 1.
-    struct wait_status *ws = list_entry (list_pop_front(&cur->o_children_wait_status_list), struct wait_status, wselem);
+    struct wait_status *ws = list_entry (list_pop_front(&thread_current()->o_children_wait_status_list), struct wait_status, wselem);
     wait_status_mod_ref(ws, -1);
   }
 
   // Decrement this thread's wait status struct reference count by 1.
-  wait_status_mod_ref(cur->o_wait_status, -1);
+  wait_status_mod_ref(curThread->o_wait_status, -1);
 
   thread_current ()->status = THREAD_DYING;
   schedule ();

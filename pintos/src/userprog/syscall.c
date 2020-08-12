@@ -10,16 +10,15 @@
 #include "threads/vaddr.h"
 #include "filesys/filesys.h"
 #include "filesys/file.h"
-#include "filesys/directory.h"
 #include "devices/input.h"
 
 #include "threads/vaddr.h"
 #include "devices/shutdown.h"
 #include "userprog/pagedir.h"
 #include "userprog/process.h"
-#include "filesys/inode.h"
-// #include "filesys/inode.c"
-// #include "filesys/file.c"
+
+#include "filesys/directory.h"
+
 
 static void syscall_handler (struct intr_frame *);
 struct lock file_lock;
@@ -31,7 +30,7 @@ syscall_init (void)
   lock_init(&file_lock);
 }
 
-/*
+/**
 * Checks VADDR is not NULL, is in userspace, and is mapped.
 */
 static bool
@@ -90,8 +89,8 @@ is_valid_fd(int fd, struct thread *t) {
 static void
 syscall_handler (struct intr_frame *f UNUSED)
 {
-  struct thread *cur = thread_current ();
   uint32_t* args = ((uint32_t*) f->esp);
+  struct thread *cur = thread_current();
 
   /*
    * The following print statement, if uncommented, will print out the syscall
@@ -107,18 +106,23 @@ syscall_handler (struct intr_frame *f UNUSED)
    * to account for the type of user pointer provided. 
    */
 
-  inline bool is_bad_p_byte(void *user_p) {
-    return !is_valid(user_p, thread_current());
+  inline bool is_bad_p_byte(void *user_p)
+  {
+    return !is_valid(user_p, cur);
   }
-  bool is_bad_str(void *user_p) {
-    while (!is_bad_p_byte(user_p)) {
+  bool is_bad_str(void *user_p)
+  {
+    while (!is_bad_p_byte(user_p))
+    {
       if (*((char *) user_p) == '\0') return false;
       user_p++;
     }
     return true;
   }
-  bool is_bad_fp(void *user_p) {
-    for (int i = 0; i < 4; i ++) {
+  bool is_bad_fp(void *user_p)
+  {
+    for (int i = 0; i < 4; i ++)
+    {
       if (is_bad_p_byte(user_p + i))
         return true;
     }
@@ -134,13 +138,16 @@ syscall_handler (struct intr_frame *f UNUSED)
     printf ("%s: exit(%d)\n", (char *) &cur->name, exit_code);
     thread_exit();
   }
-  void exit_error(void) {
+  void exit_error(void)
+  {
     exit_with_code(-1);
   }
-  inline void exit_if_bad_arg(int i) {
+  inline void exit_if_bad_arg(int i)
+  {
     if (is_bad_fp(&args[i])) exit_error();
   }
-  inline void exit_if_bad_str(char* str) {
+  inline void exit_if_bad_str(char* str)
+  {
     if (is_bad_str(str)) exit_error();
   }
 
@@ -149,6 +156,13 @@ syscall_handler (struct intr_frame *f UNUSED)
     exit_if_bad_arg(1);
     f->eax = args[1] + 1;
     return;
+  }
+
+  if (args[0] == SYS_EXEC) {
+    /* Protect file operations in exec by including it in the critical section. */
+    exit_if_bad_arg(1);
+    exit_if_bad_str(args[1]);
+    f->eax = process_execute((char *) args[1]);
   }
 
   if (args[0] == SYS_HALT) {
@@ -167,13 +181,6 @@ syscall_handler (struct intr_frame *f UNUSED)
     f->eax = process_wait(args[1]); 
   }
 
-  if (args[0] == SYS_EXEC) {
-    /* Protect file operations in exec by including it in the critical section. */
-    exit_if_bad_arg(1);
-    exit_if_bad_str((char *) args[1]);
-    f->eax = process_execute((char *) args[1]);
-  }
-
   if (args[0] == SYS_CREATE) {
     /* Check if &args[1], &args[2] are valid. */
     if (!is_valid((void *) args + 1, cur) || !is_valid((void *) args + 2, cur)) {
@@ -186,35 +193,14 @@ syscall_handler (struct intr_frame *f UNUSED)
     /* Check every character in args[1] has a valid address until the null terminator. */
     int n = is_valid_string((char *) args[1], cur);
     if (n < 0) {
-      f->eax = false;
-      return;
+        f->eax = false;
+        return;
     }
     /* Copy over args[1]. */
     char file_name[n];
     memcpy((char *) file_name, (char *) args[1], n + 1);
     /* Call the appropriate filesys function and store the return value. */
     f->eax = filesys_create((char *) file_name, args[2]);
-  }
-
-  if (args[0] == SYS_REMOVE) {
-    /* Check if &args[1] is valid.*/
-    if (!is_valid((void *)args + 1, cur)) {
-        exit_with_code(-1);
-    }
-    /* Check if args[1] is valid and is not a null pointer. */
-    if (!is_valid((void *)args[1], cur) || args[1] == 0) {
-        exit_with_code(-1);
-    }
-    /* Check every character in args[1] has a valid address until the null terminator. */
-    int n = is_valid_string((char *)args[1], cur);
-    if (n < 0) {
-      f->eax = false;
-      return;
-    }
-    /* Copy over args[1]. */
-    char file_name[n];
-    memcpy((char *)file_name, (char *)args[1], n + 1);
-    f->eax = filesys_remove((char *)args[1]);
   }
 
   if (args[0] == SYS_OPEN) {
@@ -453,8 +439,8 @@ syscall_handler (struct intr_frame *f UNUSED)
       f->eax = 0;
       return;
     }
-    printf("test\n");
-    if (subdir_create(file_name, subdir)) printf("success\n");
+    // printf("test\n");
+    // if (subdir_create(file_name, subdir)) printf("success\n");
   }
   
   if (args[0] == SYS_READDIR) {
@@ -499,7 +485,6 @@ syscall_handler (struct intr_frame *f UNUSED)
   * Task 3: File operations.
   * Below is a critical section that uses the global lock FILE_LOCK.
   */
- 
   // if (args[0] == SYS_CREATE
   //   || args[0] == SYS_REMOVE
   //   || args[0] == SYS_OPEN
@@ -513,36 +498,36 @@ syscall_handler (struct intr_frame *f UNUSED)
 
   //     /* Acquire the lock and obtain the current thread. */
   //     //lock_acquire(&file_lock);
-  //     // struct thread *cur = thread_current ();
+  //     struct thread *cur = thread_current ();
 
   //     if (args[0] == SYS_EXEC) {
   //       /* Protect file operations in exec by including it in the critical section. */
   //       exit_if_bad_arg(1);
   //       exit_if_bad_str(args[1]);
   //       f->eax = process_execute((char *) args[1]);
-  //     } else if (args[0] == SYS_CREATE) {
-  //       /* Check if &args[1], &args[2] are valid. */
-  //       if (!is_valid((void *) args + 1, cur) || !is_valid((void *) args + 2, cur)) {
-  //         //lock_release(&file_lock);
-  //         exit_with_code(-1);
-  //       }
-  //       /* Check if args[1] is valid and is not a null pointer. */
-  //       if (!is_valid((void *) args[1], cur) || args[1] == 0) {
-  //         //lock_release(&file_lock);
-  //         exit_with_code(-1);
-  //       }
-  //       /* Check every character in args[1] has a valid address until the null terminator. */
-  //       int n = is_valid_string((char *) args[1], cur);
-  //       if (n < 0) {
-  //           f->eax = false;
-  //           goto release;
-  //       }
-  //       /* Copy over args[1]. */
-  //       char file_name[n];
-  //       memcpy((char *) file_name, (char *) args[1], n + 1);
-  //       /* Call the appropriate filesys function and store the return value. */
-  //       f->eax = filesys_create((char *) file_name, args[2]);
-  //     } else if (args[0] == SYS_REMOVE) {
+      // } else if (args[0] == SYS_CREATE) {
+      //   /* Check if &args[1], &args[2] are valid. */
+      //   if (!is_valid((void *) args + 1, cur) || !is_valid((void *) args + 2, cur)) {
+      //     //lock_release(&file_lock);
+      //     exit_with_code(-1);
+      //   }
+      //   /* Check if args[1] is valid and is not a null pointer. */
+      //   if (!is_valid((void *) args[1], cur) || args[1] == 0) {
+      //     //lock_release(&file_lock);
+      //     exit_with_code(-1);
+      //   }
+      //   /* Check every character in args[1] has a valid address until the null terminator. */
+      //   int n = is_valid_string((char *) args[1], cur);
+      //   if (n < 0) {
+      //       f->eax = false;
+      //       goto release;
+      //   }
+      //   /* Copy over args[1]. */
+      //   char file_name[n];
+      //   memcpy((char *) file_name, (char *) args[1], n + 1);
+      //   /* Call the appropriate filesys function and store the return value. */
+      //   f->eax = filesys_create((char *) file_name, args[2]);
+      // } else if (args[0] == SYS_REMOVE) {
   //       /* Check if &args[1] is valid.*/
   //       if (!is_valid((void *) args + 1, cur)) {
   //         //lock_release(&file_lock);
@@ -753,6 +738,6 @@ syscall_handler (struct intr_frame *f UNUSED)
   //     release:
   //     c++;
   //       //lock_release(&file_lock);
-  //   } 
+  //   }
 
 }

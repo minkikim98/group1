@@ -66,7 +66,7 @@ static bool get_sector (block_sector_t *sector)
 {
   bool b = free_map_allocate (1, sector);
   if (!b) return false;
-  block_write (fs_device, *sector, zero_block);
+  write_buffered (fs_device, *sector, zero_block, 0, BLOCK_SECTOR_SIZE);
   return true;
 }
 
@@ -94,19 +94,17 @@ static bool can_allocate (size_t num)
 static block_sector_t read_sector (block_sector_t sector, int index)
 {
   ASSERT (sector);
-  uint8_t buffer[BLOCK_SECTOR_SIZE];
-  block_read (fs_device, sector, buffer);
-  return ((block_sector_t*) buffer)[index];
+  uint8_t buffer[sizeof(block_sector_t)];
+  read_buffered (fs_device, sector, buffer, index * sizeof(int), index * sizeof(int) + sizeof(block_sector_t));
+  return ((block_sector_t*) buffer)[0];
 }
 
 static void write_sector (block_sector_t sector, int index, block_sector_t good_stuff)
 {
   ASSERT (sector);
-  uint8_t buffer[BLOCK_SECTOR_SIZE];
-  block_read (fs_device, sector, buffer);
-  ASSERT (((block_sector_t*) buffer)[index] == 0);
-  ((block_sector_t*) buffer)[index] = good_stuff;
-  block_write (fs_device, sector, buffer);
+  uint8_t buffer[sizeof(block_sector_t)];
+  ((block_sector_t*) buffer)[0] = good_stuff;
+  write_buffered (fs_device, sector, buffer, index * sizeof(int), index * sizeof(int) + sizeof(block_sector_t));
 }
 
 #define Indirect_Block (BLOCK_SECTOR_SIZE / 4)
@@ -116,7 +114,7 @@ static void install_sector (struct inode_disk *disk_inode, int i)
   ASSERT (i < NUM_DIRECT_PTRS + BLOCK_SECTOR_SIZE / 4 * (1 + BLOCK_SECTOR_SIZE / 4));
   block_sector_t sec;
   ASSERT (get_sector (&sec));
-  block_write (fs_device, sec, zero_block);
+  write_buffered (fs_device, sec, zero_block, 0, BLOCK_SECTOR_SIZE);
   if (i < NUM_DIRECT_PTRS)
   {
     disk_inode->direct_ptrs[i] = sec;
@@ -168,7 +166,7 @@ static bool inode_extend (struct inode_disk *disk_inode, size_t sectors)
   }
 
 /*
-This function is called always from inode_write, what this does is it checks if 
+This function is called always from inode_write, what this does is it checks if
 the disk_node needs to be extended given its new length and extends accordingly
 if it needs to. :^)
 */
@@ -207,7 +205,7 @@ static bool inode_extend_start (struct inode_disk *disk_inode, int sector, size_
   {
     install_sector (disk_inode, i);
   }
-  block_write (fs_device, sector, disk_inode);
+  write_buffered (fs_device, sector, disk_inode, 0, BLOCK_SECTOR_SIZE);
   return true;
 }
 
@@ -349,6 +347,7 @@ inode_open (block_sector_t sector)
   lock_init (&inode->inode_dir_lock);
 
   block_read (fs_device, inode->sector, &inode->data);
+  read_buffered (fs_device, inode->sector, &inode->data, 0, BLOCK_SECTOR_SIZE);
   //printf ("Opening a file, return\n");
   return inode;
 }
@@ -389,7 +388,6 @@ inode_close (struct inode *inode)
     lock_init (&ll);
   }
   /* Ignore null pointer. */
-  //printf ("Closing inode: %04x\n", inode);
   if (inode == NULL)
   {
   //lock_release (&ll);
@@ -451,7 +449,7 @@ inode_close (struct inode *inode)
   lock_release (&inode->inode_lock);
   if (should_free)
   {
-    block_write (fs_device, inode->sector, &inode->data);
+    write_buffered (fs_device, inode->sector, &inode->data, 0, BLOCK_SECTOR_SIZE);
     free (inode);
     //printf ("Freed %04x\n", inode);
   }
@@ -472,9 +470,47 @@ inode_remove (struct inode *inode)
 
 /* Reads SIZE bytes from INODE into BUFFER, starting at position OFFSET.
    Returns the number of bytes actually read, which may be less
+   than SIZE if an error occurs or end of file is reached.
+   Use the buffer cache instead of the bounce buffer. */
+off_t
+inode_read_at (struct inode *inode, void *buffer_, off_t size, off_t offset) {
+  ASSERT (inode);
+  lock (inode);
+  uint8_t *buffer = buffer_;
+  off_t bytes_read = 0;
+  while (size > 0)
+    {
+      /* Disk sector to read, starting byte offset within sector. */
+      block_sector_t sector_idx = byte_to_sector (inode, offset);
+      int sector_ofs = offset % BLOCK_SECTOR_SIZE;
+
+      /* Bytes left in inode, bytes left in sector, lesser of the two. */
+      off_t inode_left = inode_length (inode) - offset;
+      int sector_left = BLOCK_SECTOR_SIZE - sector_ofs;
+      int min_left = inode_left < sector_left ? inode_left : sector_left;
+
+      /* Number of bytes to actually copy out of this sector. */
+      int chunk_size = size < min_left ? size : min_left;
+      if (chunk_size <= 0)
+        break;
+
+      read_buffered (fs_device, sector_idx, buffer + bytes_read, sector_ofs, sector_ofs + chunk_size);
+
+      /* Advance. */
+      size -= chunk_size;
+      offset += chunk_size;
+      bytes_read += chunk_size;
+    }
+  rel (inode);
+
+  return bytes_read;
+}
+
+/* Reads SIZE bytes from INODE into BUFFER, starting at position OFFSET.
+   Returns the number of bytes actually read, which may be less
    than SIZE if an error occurs or end of file is reached. */
 off_t
-inode_read_at (struct inode *inode, void *buffer_, off_t size, off_t offset)
+inode_read_at_no_buffer (struct inode *inode, void *buffer_, off_t size, off_t offset)
 {
   ASSERT (inode);
   lock (inode);
@@ -531,9 +567,56 @@ inode_read_at (struct inode *inode, void *buffer_, off_t size, off_t offset)
    Returns the number of bytes actually written, which may be
    less than SIZE if end of file is reached or an error occurs.
    (Normally a write at end of file would extend the inode, but
-   growth is not yet implemented.) */
+   growth is not yet implemented.)
+   Use the buffer cache instead of the bounce buffer.*/
 off_t
 inode_write_at (struct inode *inode, const void *buffer_, off_t size,
+                off_t offset) {
+  ASSERT (inode);
+  lock (inode);
+  uint8_t *buffer = buffer_;
+  off_t bytes_written = 0;
+  bool s = inode_extend_to_bytes (&inode->data, offset+size);
+  if (inode->deny_write_cnt)
+  {
+    rel (inode);
+    return 0;
+  }
+  while (size > 0)
+    {
+      /* Disk sector to read, starting byte offset within sector. */
+      block_sector_t sector_idx = byte_to_sector (inode, offset);
+      int sector_ofs = offset % BLOCK_SECTOR_SIZE;
+
+      /* Bytes left in inode, bytes left in sector, lesser of the two. */
+      off_t inode_left = inode_length (inode) - offset;
+      int sector_left = BLOCK_SECTOR_SIZE - sector_ofs;
+      int min_left = inode_left < sector_left ? inode_left : sector_left;
+
+      /* Number of bytes to actually copy out of this sector. */
+      int chunk_size = size < min_left ? size : min_left;
+      if (chunk_size <= 0)
+        break;
+
+      write_buffered (fs_device, sector_idx, buffer + bytes_written, sector_ofs, sector_ofs + chunk_size);
+
+      /* Advance. */
+      size -= chunk_size;
+      offset += chunk_size;
+      bytes_written += chunk_size;
+    }
+  rel (inode);
+
+  return bytes_written;
+}
+
+/* Writes SIZE bytes from BUFFER into INODE, starting at OFFSET.
+   Returns the number of bytes actually written, which may be
+   less than SIZE if end of file is reached or an error occurs.
+   (Normally a write at end of file would extend the inode, but
+   growth is not yet implemented.) */
+off_t
+inode_write_at_no_buffer (struct inode *inode, const void *buffer_, off_t size,
                 off_t offset)
 {
   ASSERT (inode);
@@ -609,8 +692,10 @@ void
 inode_deny_write (struct inode *inode)
 {
   ASSERT (inode);
+  lock (inode);
   inode->deny_write_cnt++;
   ASSERT (inode->deny_write_cnt <= inode->open_cnt);
+  rel (inode);
 }
 
 /* Re-enables writes to INODE.
@@ -622,7 +707,9 @@ inode_allow_write (struct inode *inode)
   ASSERT (inode);
   ASSERT (inode->deny_write_cnt > 0);
   ASSERT (inode->deny_write_cnt <= inode->open_cnt);
+  lock (inode);
   inode->deny_write_cnt--;
+  rel (inode);
 }
 
 /* Returns the length, in bytes, of INODE's data. */
