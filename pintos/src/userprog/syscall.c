@@ -394,6 +394,7 @@ syscall_handler (struct intr_frame *f UNUSED)
   
   if (args[0] == SYS_CHDIR) {
     /* NOTE: This syscall should close the previous cwd using dir_close. */
+
   }
   
   if (args[0] == SYS_MKDIR) {
