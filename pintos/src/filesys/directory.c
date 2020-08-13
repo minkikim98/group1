@@ -331,7 +331,7 @@ struct dir *get_dir_from_path(char *path) {
 
   const char *saved_path = path;
 
-  if (path == "") return dir_reopen(t->cwd);
+  if (path[0] == '\0') return dir_reopen(t->cwd);
 
   // Check if path is relative or absolute.
   if (is_relative(path)) cur_dir = dir_reopen(t->cwd);
@@ -399,7 +399,7 @@ struct inode *get_inode_from_path(char *path) {
     }
     // Reached end of path successfully. 
     else if (status == 0) {
-      dir_close(cur_dir);
+      // dir_close(cur_dir);
       return next;
     }
     // Got part of the path successfully.
@@ -422,15 +422,15 @@ struct inode *get_inode_from_path(char *path) {
 struct dir *get_subdir_from_path(char *path) {
   int path_len = strlen(path);
   char copy[PATH_MAX + 1];
-  strlcpy(copy, path, path_len);
+  memcpy(copy, path, path_len); 
 
-  char *end = copy + path_len - 1;
+  const char *end = copy + path_len - 1;
 
   while (*end == '/') {
     end--;
     path_len--;
   }
-  while (*end != '/') {
+  while (*end != '/' && path_len != 0) {
     end--;
     path_len--;
   }
