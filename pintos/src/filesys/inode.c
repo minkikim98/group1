@@ -346,7 +346,7 @@ inode_open (block_sector_t sector)
   /* Project 3 Task 3 */
   lock_init (&inode->inode_dir_lock);
 
-  block_read (fs_device, inode->sector, &inode->data);
+  // block_read (fs_device, inode->sector, &inode->data);
   read_buffered (fs_device, inode->sector, &inode->data, 0, BLOCK_SECTOR_SIZE);
   //printf ("Opening a file, return\n");
   return inode;

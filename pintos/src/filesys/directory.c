@@ -376,7 +376,6 @@ struct dir *get_dir_from_path(char *path) {
 /* Opens the inode the path is referring to, whether file or directory. 
    Assumes callee closes inode. */
 struct inode *get_inode_from_path(char *path) { 
-
   ASSERT (path != NULL);
 
   struct thread *t = thread_current();
@@ -385,7 +384,6 @@ struct inode *get_inode_from_path(char *path) {
   char part[NAME_MAX + 1];
 
   const char *saved_path = path;
-
   // Check if path is relative or absolute.
   if (is_relative(path)) cur_dir = dir_reopen(t->cwd);
   else cur_dir = dir_open_root();  
@@ -446,15 +444,18 @@ struct dir *get_subdir_from_path(char *path) {
 
 bool subdir_create(char *name, struct dir *parent) {
   block_sector_t inode_sector = 0;
-  bool success = (parent != NULL
-                  && free_map_allocate (1, &inode_sector)
-                  && inode_create (inode_sector, 2 * sizeof (struct dir_entry))
-                  && dir_add (parent, name, inode_sector));
+  bool success = (parent != NULL);
+  free_map_allocate (1, &inode_sector);
+  inode_create (inode_sector, 2 * sizeof (struct dir_entry));
+  dir_add (parent, name, inode_sector);
+  // bool success = (parent != NULL
+  //                 && free_map_allocate (1, &inode_sector)
+  //                 && inode_create (inode_sector, 2 * sizeof (struct dir_entry))
+  //                 && dir_add (parent, name, inode_sector));
   if (!success && inode_sector != 0)
     free_map_release (inode_sector, 1);
   
 
-  printf("test2\n");
   // Need to add . and .. entries. 
 
   struct inode *new = NULL;

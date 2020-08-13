@@ -427,7 +427,6 @@ syscall_handler (struct intr_frame *f UNUSED)
       f->eax = 0;
       return;
     }
-
     // If inode with same name already exists, return false.
     if (get_inode_from_path(file_name) != NULL) {
       f->eax = 0;
@@ -440,8 +439,9 @@ syscall_handler (struct intr_frame *f UNUSED)
       f->eax = 0;
       return;
     }
+
     // printf("test\n");
-    // if (subdir_create(file_name, subdir)) printf("success\n");
+    if (subdir_create(file_name, subdir)) printf("success\n");
   }
   
   if (args[0] == SYS_READDIR) {

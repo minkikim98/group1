@@ -161,6 +161,10 @@ start_process (void *arg_set_)
   }
   sema_up(&arg_set->my_load_semaphore);
 
+  /* Project 3, Task 3 */
+  /* Initialize cwd. */
+  thread_current()->cwd = dir_open_root();
+
   /* Start the user process by simulating a return from an
      interrupt, implemented by intr_exit (in
      threads/intr-stubs.S).  Because intr_exit takes all of its
@@ -237,9 +241,15 @@ process_exit (void)
       pagedir_activate (NULL);
       pagedir_destroy (pd);
     }
-    // Signal to parent that child process finished.
-    struct wait_status *my_wait_status = cur->o_wait_status;
-    sema_up (&my_wait_status->o_sem_exited);
+
+  // Signal to parent that child process finished.
+  struct wait_status *my_wait_status = cur->o_wait_status;
+  sema_up (&my_wait_status->o_sem_exited);
+
+  /* Project 3, Task 3 */
+
+  /* Close the thread's cwd. */
+  dir_close(cur->cwd);
 }
 
 /* Sets up the CPU for running user code in the current
