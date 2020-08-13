@@ -299,19 +299,19 @@ get_next_part (char part[NAME_MAX + 1], const char **srcp) {
   return 1;
 }
 
-/* Checks to see if *SRCP is about to read the last part. 
-   Reverts *SRCP to original state afterwards. */
+/* Gets last part of path. */
 
-static bool is_last_part(const char **srcp) {
-  const char *saved = *srcp;
-  char part[NAME_MAX + 1];
+bool get_last_part(char part[NAME_MAX + 1], const char **srcp) {
   int status;
-
-  get_next_part(part, srcp);
-  status = get_next_part(part, srcp);
-  *srcp = saved;
-  if (status == 0) return true;
-  else return false;
+  while (1) {
+    status = get_next_part(part, srcp);
+    if (status == -1) {
+      return false;
+    }
+    else if (status == 0) {
+      return true;
+    }
+  }
 }
 
 static bool is_relative(char *path) {
@@ -319,7 +319,8 @@ static bool is_relative(char *path) {
   else return true;
 }
 
-/* Opens the directory the path is referring to. Assumes callee closes directory. */
+/* Opens the directory the path is referring to. 
+   Assumes caller closes directory. Leaves dir opened. */
 struct dir *get_dir_from_path(char *path) {
 
   ASSERT (path != NULL);
@@ -349,12 +350,12 @@ struct dir *get_dir_from_path(char *path) {
     }
     // Reached end of path successfully. 
     else if (status == 0) {
-      dir_close(cur_dir);
+      // dir_close(cur_dir);
       return cur_dir;
     }
     // Got part of the path successfully.
     else {
-      if (dir_lookup(cur_dir, saved_path, &next)) {
+      if (dir_lookup(cur_dir, part, &next)) {
         // Check if result is a directory.
         if (!inode_is_dir(next)) {
           inode_close(next);
@@ -374,7 +375,7 @@ struct dir *get_dir_from_path(char *path) {
 }
 
 /* Opens the inode the path is referring to, whether file or directory. 
-   Assumes callee closes inode. */
+   Assumes caller closes inode. */
 struct inode *get_inode_from_path(char *path) { 
   ASSERT (path != NULL);
 
@@ -400,11 +401,12 @@ struct inode *get_inode_from_path(char *path) {
     // Reached end of path successfully. 
     else if (status == 0) {
       // dir_close(cur_dir);
+      // free(cur_dir);
       return next;
     }
     // Got part of the path successfully.
     else {
-      if (cur_dir != NULL && dir_lookup(cur_dir, saved_path, &next)) {
+      if (cur_dir != NULL && dir_lookup(cur_dir, part, &next)) {
         dir_close(cur_dir);
         // If next was not a directory, our next iteration will check if cur_dir was set to NULL.
         cur_dir = dir_open(next);
@@ -442,29 +444,26 @@ struct dir *get_subdir_from_path(char *path) {
    The subdirectory has the . and .. entries appended to it.
    This code was derived from filesys_create in filesys.c. */
 
+// parent = /;
 bool subdir_create(char *name, struct dir *parent) {
   block_sector_t inode_sector = 0;
-  bool success = (parent != NULL);
-  free_map_allocate (1, &inode_sector);
-  inode_create (inode_sector, 2 * sizeof (struct dir_entry));
-  dir_add (parent, name, inode_sector);
-  // bool success = (parent != NULL
-  //                 && free_map_allocate (1, &inode_sector)
-  //                 && inode_create (inode_sector, 2 * sizeof (struct dir_entry))
-  //                 && dir_add (parent, name, inode_sector));
-  if (!success && inode_sector != 0)
+  bool success = (parent != NULL
+                  && free_map_allocate (1, &inode_sector)
+                  && inode_create (inode_sector, 2 * sizeof (struct dir_entry))
+                  && dir_add (parent, name, inode_sector));
+  if (!success && inode_sector != 0){
     free_map_release (inode_sector, 1);
-  
-
-  // Need to add . and .. entries. 
+    return false;
+  }
 
   struct inode *new = NULL;
   if (dir_lookup(parent, name, &new)) {
     inode_set_dir(new);
     block_sector_t parent_sector = get_inode_sector(dir_get_inode(parent));
     block_sector_t new_sector = get_inode_sector(new);
-    dir_add(new, ".", new_sector);
-    dir_add(new, "..", parent_sector);
+    dir_add(dir_open(inode_open(new_sector)), ".", new_sector);
+    dir_add(dir_open(inode_open(parent_sector)), "..", parent_sector);
+    // printf("new directory: %x\n", new);
     inode_close(new);
   } else {
     success = false;
@@ -472,5 +471,22 @@ bool subdir_create(char *name, struct dir *parent) {
   dir_close (parent);
   return success;
 }
+
+bool is_empty(struct dir* dir) {
+  struct dir_entry e;
+  size_t ofs;
+
+  ASSERT (dir != NULL);
+
+  for (ofs = 2 * (sizeof e); inode_read_at (dir->inode, &e, sizeof e, ofs) == sizeof e;
+       ofs += sizeof e)
+    if (e.in_use)
+      return false;
+  return true;
+}
+
+/* void print_dir (struct dir *dir) {
+
+} */
 
 /* End Segment */

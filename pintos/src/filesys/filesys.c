@@ -47,6 +47,8 @@ filesys_done (void)
 bool
 filesys_create (const char *name, off_t initial_size)
 {
+  /* Original Implementation */
+
   block_sector_t inode_sector = 0;
   struct dir *dir = dir_open_root ();
   bool success = (dir != NULL
@@ -85,11 +87,33 @@ filesys_open (const char *name)
 bool
 filesys_remove (const char *name)
 {
-  struct dir *dir = dir_open_root ();
+  /* Original Implementation */
+
+  /* struct dir *dir = dir_open_root ();
   bool success = dir != NULL && dir_remove (dir, name);
   dir_close (dir);
 
-  return success;
+  return success; */
+
+  struct inode *inode = get_inode_from_path(name);
+  if (inode != NULL) {
+    struct dir *subdir = get_subdir_from_path(name);
+    if (subdir != NULL) {
+      if (inode_is_dir(inode)) {
+        // printf("test\n");
+        if (is_empty(dir_open(inode))) {
+          dir_remove(subdir, name);
+        } 
+        else return false;
+      } else {
+        return dir_remove(subdir, name);
+      }
+    } else {
+      return false;
+    }
+  } else {
+    return false;
+  }
 }
 
 /* Formats the file system. */
@@ -102,4 +126,46 @@ do_format (void)
     PANIC ("root directory creation failed");
   free_map_close ();
   printf ("done.\n");
+}
+
+/* Project 3 Task 3 */
+
+bool filesys_create_2 (const char *name, off_t initial_size) {
+  struct dir *subdir = get_subdir_from_path(name);
+
+  char part[NAME_MAX + 1];
+  if (!get_last_part(part, &name)) return false;
+  block_sector_t inode_sector = 0;
+  bool success = (subdir != NULL
+                && free_map_allocate (1, &inode_sector)
+                && inode_create (inode_sector, initial_size)
+                && dir_add (subdir, part, inode_sector));
+  if (!success && inode_sector != 0)
+    free_map_release (inode_sector, 1);
+  dir_close (subdir);
+  return success;
+}
+  
+union fd *
+filesys_open_2 (const char *name)
+{
+  /* struct dir *dir = dir_open_root ();
+  struct inode *inode = NULL;
+
+  if (dir != NULL)
+    dir_lookup (dir, name, &inode);
+  dir_close (dir);
+
+  return file_open (inode); */
+
+  struct inode *inode = get_inode_from_path(name);
+  if (inode != NULL) {
+    if (inode_is_dir(inode)) {
+      return dir_open(inode);
+    } else {
+      return file_open(inode);
+    }
+  } else {
+    return NULL;
+  }
 }

@@ -200,7 +200,13 @@ syscall_handler (struct intr_frame *f UNUSED)
     char file_name[n];
     memcpy((char *) file_name, (char *) args[1], n + 1);
     /* Call the appropriate filesys function and store the return value. */
-    f->eax = filesys_create((char *) file_name, args[2]);
+
+    if (n > PATH_MAX) {
+      f->eax = false;
+      return;
+    }
+
+    f->eax = filesys_create_2((char *) file_name, args[2]);
   }
 
   if (args[0] == SYS_OPEN) {
@@ -224,7 +230,7 @@ syscall_handler (struct intr_frame *f UNUSED)
     char file_name[n];
     memcpy((char *) file_name, (char *) args[1], n + 1);
     /* Call the appropriate filesys function. */
-    struct file* fp = filesys_open(file_name);
+    union fd *fp = filesys_open_2(file_name);
     /* Assign a file descriptor. */
     if (fp == NULL) {
       f->eax = -1;
@@ -243,6 +249,29 @@ syscall_handler (struct intr_frame *f UNUSED)
       return;
     }
     f->eax = fd;
+  }
+
+  if (args[0] == SYS_REMOVE) {
+    /* Check if &args[1] is valid.*/
+    if (!is_valid((void *) args + 1, cur)) {
+      //lock_release(&file_lock);
+      exit_with_code(-1);
+    }
+    /* Check if args[1] is valid and is not a null pointer. */
+    if (!is_valid((void *) args[1], cur) || args[1] == 0) {
+      //lock_release(&file_lock);
+      exit_with_code(-1);
+    }
+    /* Check every character in args[1] has a valid address until the null terminator. */
+    int n = is_valid_string((char *) args[1], cur);
+    if (n < 0) {
+        f->eax = false;
+        return;
+    }
+    /* Copy over args[1]. */
+    char file_name[n];
+    memcpy((char *) file_name, (char *) args[1], n + 1);
+    f->eax = filesys_remove((char *) args[1]);
   }
 
   if (args[0] == SYS_FILESIZE) {
@@ -395,6 +424,40 @@ syscall_handler (struct intr_frame *f UNUSED)
   if (args[0] == SYS_CHDIR) {
     /* NOTE: This syscall should close the previous cwd using dir_close. */
 
+    /* Check if &args[1] is valid.*/
+    if (!is_valid((void *)args + 1, cur)) {
+        exit_with_code(-1);
+    }
+    /* Check if args[1] is valid and is not a null pointer. */
+    if (!is_valid((void *)args[1], cur) || args[1] == 0) {
+        exit_with_code(-1);
+    }
+    /* Check every character in args[1] has a valid address until the null terminator. */
+    int n = is_valid_string((char *)args[1], cur);
+    if (n < 0) {
+      f->eax = false;
+      return;
+    }
+    /* Copy over args[1]. */
+    char file_name[n];
+    memcpy((char *)file_name, (char *)args[1], n + 1);
+
+    // If name is empty, return false.
+    if (strlen(file_name) == 0) {
+      f->eax = 0;
+      return;
+    }
+
+    struct dir *dir = get_dir_from_path(file_name);
+    if (dir != NULL) {
+      // printf("prev cwd: %x\n", cur->cwd);
+      dir_close(cur->cwd);
+      // printf("new cwd: %x\n", dir);
+      cur->cwd = dir;
+    } else {
+      f->eax = 0;
+      return;
+    }
   }
   
   if (args[0] == SYS_MKDIR) {
@@ -428,20 +491,23 @@ syscall_handler (struct intr_frame *f UNUSED)
       return;
     }
     // If inode with same name already exists, return false.
-    if (get_inode_from_path(file_name) != NULL) {
+    struct inode *inode = get_inode_from_path(file_name);
+    if (inode != NULL) {
+      inode_close(inode);
       f->eax = 0;
       return;
     }
 
     // Get the directory the inode should be in.
-    struct dir *subdir = get_subdir_from_path(file_name);
+    struct dir *subdir = get_subdir_from_path(file_name); //a
     if (subdir == NULL) {
       f->eax = 0;
       return;
     }
 
     // printf("test\n");
-    if (subdir_create(file_name, subdir)) printf("success\n");
+    f->eax = subdir_create(file_name, subdir);
+    // file_close(subdir);
   }
   
   if (args[0] == SYS_READDIR) {

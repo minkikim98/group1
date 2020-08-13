@@ -31,10 +31,12 @@ bool dir_remove (struct dir *, const char *name);
 bool dir_readdir (struct dir *, char name[NAME_MAX + 1]);
 
 /* Project 3 Task 3 */
+bool get_last_part(char part[NAME_MAX + 1], const char **srcp);
 struct dir *get_dir_from_path(char *);
 struct inode *get_inode_from_path(char *);
 struct dir *get_subdir_from_path(char *);
 bool subdir_create(char *, struct dir *);
+bool is_empty(struct dir*);
 
 
 #endif /* filesys/directory.h */

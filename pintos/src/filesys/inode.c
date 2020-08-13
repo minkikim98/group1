@@ -291,13 +291,14 @@ inode_create (block_sector_t sector, off_t length)
 
 static void lock (struct inode *inode)
 {
+  // printf ("about to lock, %04x, acquire holder: %04x, count: %d\n", inode, inode->inode_lock.holder, inode->open_cnt);
   lock_acquire (&(inode->inode_lock));
-  printf ("%04x, acquire holder: %04x, count: %d\n", inode, inode->inode_lock.holder, inode->open_cnt);
+  // printf ("%04x, acquire holder: %04x, count: %d\n", inode, inode->inode_lock.holder, inode->open_cnt);
 }
 
 static void rel (struct inode *inode)
 {
-  printf ("%04x, release holder: %04x, count: %d\n", inode, inode->inode_lock.holder, inode->open_cnt);
+  // printf ("%04x, release holder: %04x, count: %d\n", inode, inode->inode_lock.holder, inode->open_cnt);
   lock_release (&(inode->inode_lock));
 }
 
