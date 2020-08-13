@@ -484,7 +484,6 @@ syscall_handler (struct intr_frame *f UNUSED)
       f->eax = 0;
       return;
     }
-
     // If name is '/', return false.
     if (file_name == "/") {
       f->eax = 0;
@@ -497,16 +496,18 @@ syscall_handler (struct intr_frame *f UNUSED)
       f->eax = 0;
       return;
     }
-
+    // printf("getting inode failed, as it should. file_name: %s\n", file_name);
     // Get the directory the inode should be in.
-    struct dir *subdir = get_subdir_from_path(file_name); //a
+    struct dir *subdir = get_subdir_from_path(file_name); // 
     if (subdir == NULL) {
+      file_close(subdir);
       f->eax = 0;
       return;
     }
-
-    // printf("test\n");
+    // printf("getting subdir succeeded, as it should. file_name: %s\n", file_name);
+    // printf("file_name: %s\n", file_name);
     f->eax = subdir_create(file_name, subdir);
+    // printf("finished calling subdir_create. file_name: %s\n", file_name);
     // file_close(subdir);
   }
   

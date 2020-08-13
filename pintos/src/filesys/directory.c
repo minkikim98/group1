@@ -437,6 +437,7 @@ struct dir *get_subdir_from_path(char *path) {
     path_len--;
   }
   copy[path_len] = '\0';
+  // printf("about to call get_dir from get_subdir. file_name: %s\n", path);
   return get_dir_from_path(copy);
 }
 
@@ -446,18 +447,22 @@ struct dir *get_subdir_from_path(char *path) {
 
 // parent = /;
 bool subdir_create(char *name, struct dir *parent) {
+  // printf("inside subdir_create. file_name: %s\n", name);
+  char new_name[NAME_MAX + 1];
+  get_last_part(new_name, &name);
+  // printf("inside subdir_create. new_name: %s\n", new_name);
   block_sector_t inode_sector = 0;
   bool success = (parent != NULL
                   && free_map_allocate (1, &inode_sector)
                   && inode_create (inode_sector, 2 * sizeof (struct dir_entry))
-                  && dir_add (parent, name, inode_sector));
+                  && dir_add (parent, new_name, inode_sector));
   if (!success && inode_sector != 0){
     free_map_release (inode_sector, 1);
     return false;
   }
 
   struct inode *new = NULL;
-  if (dir_lookup(parent, name, &new)) {
+  if (dir_lookup(parent, new_name, &new)) {
     inode_set_dir(new);
     block_sector_t parent_sector = get_inode_sector(dir_get_inode(parent));
     block_sector_t new_sector = get_inode_sector(new);
