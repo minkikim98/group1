@@ -10,14 +10,14 @@ Our main objective for the first part of the project was to implement support fo
 
 2.  Implementing process control and file operation syscalls. There were a total of 13 syscalls that we had to implement, to be used in both kernel and user-level programs. These syscalls included ones like ```exec```, ```halt```, ```wait``` for process control, and syscalls like ```create```, ```open```, ```filesize```, ```read```, and ```write``` for file operations.
 
-If you want to see the full spec for this stage, you can do so [here](https://github.com/minkikim98/group1/blob/master/specs/proj1-userprog.pdf).
+If you want to see the full spec for this stage, you can do so [here](https://inst.eecs.berkeley.edu/~cs162/su20/static/projects/proj1-userprog.pdf).
 
 ## Part 2
 The second task was mainly concerned with thread scheduling via priority donation. During this stage, synchronization was one of the chief concerns. We had to implement our own version of a lock, a semaphore, and a condition variable, and configure the OS so that accessing shared resources would not result in race conditions. We also had to implement priority donation for threads, which allows a high-priority thread to temporarily give or donate its priority to a lower-priority thread to avoid deadlock. 
 
-View the full spec for this part [here](https://github.com/minkikim98/group1/blob/master/specs/proj2-scheduling.pdf).
+View the full spec for this part [here](https://inst.eecs.berkeley.edu/~cs162/su20/static/projects/proj2-scheduling.pdf).
 
-In addition to the main task, we had to submit a mathematical exercise concerning various scheduling algorithms in order to examine how different approaches produce different results under various workloads. You can see the guidelines for this sub-task [here](https://github.com/minkikim98/group1/blob/master/specs/proj2-schedlab.pdf).
+In addition to the main task, we had to submit a mathematical exercise concerning various scheduling algorithms in order to examine how different approaches produce different results under various workloads. You can see the guidelines for this sub-task [here](https://inst.eecs.berkeley.edu/~cs162/su20/static/projects/proj2-schedlab.pdf).
 
 ## Part 3
 The third part was mainly concerned with file systems. Our main tasks were:
@@ -27,7 +27,7 @@ The third part was mainly concerned with file systems. Our main tasks were:
 
 3. Add support for subdirectories. Prior to this point, all files in PintOS were stored in the root directory. We had to implement new syscalls such as ```chdir```, ```mkdir```, and ```readdir``` to enable creation of directories, as well as update existing syscalls to work with subdirectories. We also had to ensure that programs could use both absolute and relative pathing when referencing files. 
 
-To view the full spec for this part, click [here](https://github.com/minkikim98/group1/blob/master/specs/proj3-filesys.pdf).  
+To view the full spec for this part, click [here](https://inst.eecs.berkeley.edu/~cs162/su20/static/projects/proj3-filesys.pdf).  
   
 &nbsp;  
   
